@@ -1,6 +1,31 @@
+# dependencies
+/node_modules
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
 __pycache__/
 *.pyc
-.env
-.env.*
-.DS_Store
-node_modules/
+
+# debug
+npm-debug.log*
+
+# env files: never commit real values...
+.env*
+# ...but the template is committed
+!.env.example
+
+# vercel
+.vercel
