@@ -303,5 +303,61 @@ begin
   reset role;
 end $$;
 
+-- =============================================================================
+-- 7. MIGRATION 0003 REGRESSIONS
+-- =============================================================================
+do $$
+declare n int;
+begin
+  -- FIX 1: judge must NOT see draft-only teams.
+  -- Put Bravo at Station 1 in the DRAFT only; the AWS judge sits at Station 1.
+  insert into public.assignments (schedule_id, team_id, panel_id, slot_id)
+  values ('50000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',
+          'b0000000-0000-0000-0000-000000000001',
+          (select id from public.slots where schedule_id='50000000-0000-0000-0000-000000000001' limit 1))
+  on conflict do nothing;
+
+  perform become('33333333-3333-3333-3333-333333333333');
+  select count(*) into n from public.teams where name = 'Team Bravo';
+  perform test_assert(n = 0, '0003: judge cannot see a team that is only in a DRAFT schedule');
+  select count(*) into n from public.teams;
+  perform test_assert(n = 1, '0003: judge still sees their own published team');
+  reset role;
+end $$;
+
+do $$
+declare v_uid uuid; v_role text; n int;
+begin
+  -- FIX 2: a judge added AFTER the person already has an account gets linked.
+  insert into auth.users (id, email)
+  values ('66666666-6666-6666-6666-666666666666','late.alum@scu.edu');
+
+  insert into public.judges (event_id, email, full_name, affiliation)
+  values ('e0000000-0000-0000-0000-000000000001','late.alum@scu.edu','Late Alum', null);
+
+  select user_id into v_uid from public.judges where email = 'late.alum@scu.edu';
+  perform test_assert(v_uid = '66666666-6666-6666-6666-666666666666',
+                      '0003: judge added after signup is linked to the existing account');
+
+  select role::text into v_role from public.profiles
+   where user_id = '66666666-6666-6666-6666-666666666666';
+  perform test_assert(v_role = 'judge',
+                      '0003: that person is promoted to the judge role');
+
+  -- and a teammate added after signup
+  insert into auth.users (id, email)
+  values ('77777777-7777-7777-7777-777777777777','late.member@scu.edu');
+  insert into public.team_members (team_id, email)
+  values ('a0000000-0000-0000-0000-000000000001','late.member@scu.edu');
+  select count(*) into n from public.team_members
+   where email='late.member@scu.edu' and user_id='77777777-7777-7777-7777-777777777777';
+  perform test_assert(n = 1, '0003: teammate added after signup is linked');
+
+  -- and they can now see their team
+  perform become('77777777-7777-7777-7777-777777777777');
+  select count(*) into n from public.teams;
+  perform test_assert(n = 1, '0003: that teammate can now see their team');
+  reset role;
+end $$;
 \echo ''
 \echo '================= ALL PHASE 1 ACCEPTANCE TESTS PASSED ================='

@@ -17,7 +17,7 @@ between judges or gets rebuilt from scratch. The cost of getting it right is one
 focused phase; the cost of getting it wrong is every phase after.
 
 The migrations and the test suite in this repo are already written and verified
-against Postgres 16 — all 25 acceptance assertions pass. **Phase 1 does not
+against Postgres 16 — all 31 acceptance assertions pass. **Phase 1 does not
 design the schema. It applies it and builds the app around it.**
 
 ---
@@ -28,7 +28,8 @@ design the schema. It applies it and builds the app around it.**
 |---|---|
 | `supabase/migrations/0001_schema.sql` | Written, applies cleanly |
 | `supabase/migrations/0002_policies.sql` | Written, applies cleanly |
-| `supabase/tests/rls_test.sql` | Written, 25/25 passing |
+| `supabase/migrations/0003_linking_and_draft_visibility.sql` | Written, applies cleanly |
+| `supabase/tests/rls_test.sql` | Written, 31/31 passing |
 
 Do not rewrite these. If something seems wrong, say so rather than editing
 silently — they encode decisions made with reasoning that isn't obvious from
@@ -148,9 +149,9 @@ so an anonymous web client never reaches the trigger.
 
 Phase 1 is done when all of these are true:
 
-1. `npx supabase start` + `npx supabase db reset` applies both migrations with
+1. `npx supabase start` + `npx supabase db reset` applies all migrations with
    no errors
-2. `npm run test:rls` prints 25 PASS lines and exits 0
+2. `npm run test:rls` prints 31 PASS lines and exits 0
 3. `npm run build` and `npm run typecheck` both pass with zero errors
 4. A real email receives a magic link, signing in lands on `/me`, and `/me`
    shows the correct role
