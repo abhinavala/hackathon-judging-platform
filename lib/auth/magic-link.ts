@@ -46,8 +46,14 @@ export async function sendSignInLink(
   email: string,
   template: LinkTemplate = "sign-in",
 ): Promise<void> {
+  // Resolve the sender first: a misconfigured deployment should fail before
+  // it mints a token (and creates an account for a new address).
+  const sender = getLinkSender();
   const link = await mintSignInLink(email);
-  await getLinkSender().send({ email, link, template });
+  // The origin only, never the token: confirms where links point per
+  // environment (each Vercel preview should show its own URL).
+  console.info(`[auth] ${template} link minted for ${new URL(link).origin}`);
+  await sender.send({ email, link, template });
 }
 
 // Light validation only; the auth server is the real judge of an address.

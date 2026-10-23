@@ -15,10 +15,25 @@ export function serviceRoleKey(): string {
   return required("SUPABASE_SERVICE_ROLE_KEY");
 }
 
-// The origin sign-in links point at. Deliberately configured rather than taken
-// from the request's Host header: a forged Host would otherwise put a working
-// token_hash for someone else's account into a link on the attacker's domain.
+// The origin sign-in links point at. Never taken from the request's Host
+// header: a forged Host would otherwise put a working token_hash for someone
+// else's account into a link on the attacker's domain.
+//
+// - Vercel preview: always this deployment's own URL (VERCEL_URL, set by
+//   Vercel, not by the request). SITE_URL is ignored here on purpose, so a
+//   value set for "All Environments" can't make previews mint links that
+//   point at production.
+// - Production: SITE_URL, required.
+// - Local dev: SITE_URL, defaulting to http://127.0.0.1:3000.
+//
+// No Supabase redirect allowlist is involved for any of these: the link goes
+// to our own /auth/callback, which verifies the token_hash server-side.
 export function siteUrl(): string {
+  if (process.env.VERCEL_ENV === "preview") {
+    const host = process.env.VERCEL_URL;
+    if (!host) throw new Error("VERCEL_URL is not set on this preview");
+    return `https://${host}`;
+  }
   const value = process.env.SITE_URL;
   if (value) return value.replace(/\/+$/, "");
   if (isProduction) throw new Error("Missing environment variable SITE_URL");
