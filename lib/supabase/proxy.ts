@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/env";
 import { isSessionCookie, readClaims } from "@/lib/supabase/claims";
-import { rolesRequiredFor } from "@/lib/route-guards";
+import { rolesRequiredFor, type Role } from "@/lib/route-guards";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Paths an anonymous visitor may load. Everything else requires a session,
 // including paths that don't exist, so an anonymous visitor can't tell real
@@ -23,10 +24,35 @@ function isPublic(pathname: string) {
   );
 }
 
-// Not a route. Rewriting a role mismatch here makes Next render its genuine
-// not-found response, status 404 included, indistinguishable from any other
-// missing path.
+// Rewrite target for a role mismatch. Next renders its genuine not-found
+// response for it (status 404 included), indistinguishable from any other
+// missing path, while the browser keeps the original URL.
+//
+// It MUST stay a path that no route will ever claim: if something is ever
+// served here, a role mismatch would render that instead of a 404. The
+// leading underscore is what guarantees it: an app/ folder named
+// _not-found-role-gate is a private folder, excluded from routing. Do not
+// create a folder spelled %5Fnot-found-role-gate (the URL-encoded escape
+// hatch for underscore routes), or a rewrite/redirect in next.config.ts that
+// matches it.
 const NOT_FOUND_PATH = "/_not-found-role-gate";
+
+// What a protected page shows when access can't be checked (auth server or
+// database unreachable). Fail closed, but say so in words, not with a 500
+// page. Plain HTML: this is the proxy, before any app code runs.
+function accessUnavailable() {
+  return new NextResponse(
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Try again in a moment</title></head><body style="font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;line-height:1.5"><h1 style="font-size:1.25rem">We can't verify your access right now</h1><p>This is usually brief. Wait a few seconds and try again.</p><p><a href="">Try again</a></p></body></html>`,
+    {
+      status: 503,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "retry-after": "5",
+      },
+    },
+  );
+}
 
 // Refreshes the auth cookie on every request, deletes it if it's corrupt,
 // bounces anonymous visitors to /login, and is THE gate for role-scoped route
@@ -85,6 +111,12 @@ export async function updateSession(request: NextRequest) {
     );
   }
 
+  // Can't tell whether there's a session (auth server unreachable). Sending
+  // the person to /login would be wrong: signing in won't work either.
+  if (status === "unavailable" && !isPublic(request.nextUrl.pathname)) {
+    return accessUnavailable();
+  }
+
   if (status !== "signed-in" && !isPublic(request.nextUrl.pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -101,15 +133,11 @@ export async function updateSession(request: NextRequest) {
   const required = rolesRequiredFor(request.nextUrl.pathname);
   if (required && auth.status === "signed-in") {
     // Read live from profiles through RLS (own row only), never from a JWT
-    // claim, so a roster change applies on the next request. A failed read
-    // throws: fail closed.
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("user_id", auth.claims.sub)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data || !required.includes(data.role)) {
+    // claim, so a roster change applies on the next request. If the read
+    // fails, fail closed with a "try again" page rather than a crash.
+    const role = await readRole(supabase, auth.claims.sub);
+    if (role === "unavailable") return accessUnavailable();
+    if (!role || !required.includes(role)) {
       const url = request.nextUrl.clone();
       url.pathname = NOT_FOUND_PATH;
       url.search = "";
@@ -120,4 +148,25 @@ export async function updateSession(request: NextRequest) {
   }
 
   return response;
+}
+
+async function readRole(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<Role | null | "unavailable"> {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) {
+      console.error("[proxy] role read failed", error);
+      return "unavailable";
+    }
+    return data?.role ?? null;
+  } catch (err) {
+    console.error("[proxy] role read failed", err);
+    return "unavailable";
+  }
 }
