@@ -122,7 +122,12 @@ known incompatibility with the PKCE code-exchange flow
 do not simplify it away.
 
 **Apps Script deployment:** a Web App with `doPost`, protected by a shared
-secret in a request header. The server posts `{email, link, template}`.
+secret **in the JSON body**. The server posts `{email, link, template,
+secret}`; the script compares `secret` and replies `{"ok": true}` once the mail
+is sent (anything else is treated as a failed send). The secret cannot go in a
+header: `doPost(e)` receives the body and query string but not the request
+headers, so a header secret could never be checked. Implemented in
+`lib/auth/senders.ts`.
 Execution caps at 6 minutes (30 on Workspace); 250 sends run ~50–125s so it
 fits, but chunk in batches of ~50 with progress recorded so a timeout is
 resumable rather than ambiguous.
@@ -134,7 +139,7 @@ resumable rather than ambiguous.
 | Case | Handling |
 |---|---|
 | **Link expired** (1h default, 24h max via Management API) | Callback detects `otp_expired` and offers one-click resend. Raise expiry to a few hours during the event. |
-| **Link already used** | Links are single-use; requesting a new one invalidates the old. Same resend path. |
+| **Link already used** | Links are single-use, and expired, used and superseded links all fail the same way (`otp_expired`). Same resend path. Requesting a new link invalidates the old one for an address that already has an account. For an address that has **never signed in**, the original signup link and a later link can both be live until one of them is used; using either invalidates the other. (Harmless, since both went to the same inbox, and it means a check-in link keeps working after a resend.) |
 | **Two teammates both check in** | `enforce_one_team_per_event` already blocks it at the database. Surface it as *"someone on your team has already checked in"*, never a raw constraint violation. |
 | **Captain's email bounces** | That's why the captain gets a receipt, not just a link. Organizer dashboard flags it **before credentials are sent**. |
 | **Teammate email typo'd** | Invite never arrives. Captain can correct it and re-send from the team page. |
