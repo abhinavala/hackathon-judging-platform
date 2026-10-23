@@ -8,7 +8,7 @@
 // test fixture is committed, and seeding on top of it would mix test rows
 // into dev data) and run `npm run seed`. Skipped when CI=true, with
 // --no-reset, after a failing run (the fixture is left for debugging), and,
-// with a note, while scripts/seed.ts doesn't exist yet.
+// with a note, while scripts/seed.mts doesn't exist yet.
 //
 // Exit 0 only if psql exits 0 AND exactly EXPECTED assertions printed PASS.
 import { spawnSync } from "node:child_process";
@@ -25,7 +25,7 @@ function run(cmd, args, opts = {}) {
   return res;
 }
 
-const SEED_SCRIPT = "scripts/seed.ts";
+const SEED_SCRIPT = "scripts/seed.mts";
 const reset = !process.argv.includes("--no-reset");
 const reseed = reset && process.env.CI !== "true";
 

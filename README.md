@@ -27,4 +27,4 @@ npm run test:rls         # expect 31 PASS, exit 0
 ```
 The suite needs an empty database, so it resets first. Outside CI, a passing
 run then resets again and runs `npm run seed` to restore dev data (skipped with
-a note until `scripts/seed.ts` exists). `CI=true` skips the re-seed.
+a note until `scripts/seed.mts` exists). `CI=true` skips the re-seed.
