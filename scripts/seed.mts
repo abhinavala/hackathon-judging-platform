@@ -1,5 +1,5 @@
 // npm run seed: builds the development fixture that Phases 2-4 develop
-// against. It is meant to look like a real Hack for Humanity, not three toy
+// against. It is meant to look like the real AWS x A10 Hack, not three toy
 // rows: 60 teams with plausible project names and ~250 members, AWS and A10
 // tracks with an overlapping mix, 16 judges on 8 panels, and a published plus
 // a draft schedule that satisfy the same invariants the real scheduler
@@ -30,16 +30,19 @@ type Insert<T extends keyof Tables> = Tables[T]["Insert"];
 // Event shape
 // ---------------------------------------------------------------------------
 
-const EVENT_SLUG = "hfh-2026";
-const EVENT_NAME = "Hack for Humanity 2026";
+const EVENT_SLUG = "aws-a10-2026";
+const EVENT_NAME = "AWS x A10 Hack";
 const EVENT_YEAR = 2026;
 const TIMEZONE = "America/Los_Angeles";
 const SLOT_MINUTES = 7;
-// Judging day. A fixed date keeps the fixture identical across runs; move it
-// if you need a countdown that hasn't passed yet.
-const CHECKIN_OPENS_AT = "2027-02-28T08:00:00-08:00";
-const CHECKIN_CLOSES_AT = "2027-02-28T09:30:00-08:00";
-const JUDGING_STARTS_AT = "2027-02-28T10:00:00-08:00";
+// The event runs Saturday-Sunday, November 7-8, 2026 (PST: daylight saving
+// ends November 1). Check-in is Saturday morning; judging is Sunday, 15
+// seven-minute slots from JUDGING_STARTS_AT. The 10:00 start is a
+// placeholder until the judging window is confirmed. Fixed dates keep the
+// fixture identical across runs.
+const CHECKIN_OPENS_AT = "2026-11-07T09:00:00-08:00";
+const CHECKIN_CLOSES_AT = "2026-11-07T11:00:00-08:00";
+const JUDGING_STARTS_AT = "2026-11-08T10:00:00-08:00";
 
 const AWS = "AWS";
 const A10 = "A10";
@@ -286,8 +289,8 @@ function buildTeams(eventId: string, rand: () => number): SeedTeam[] {
         name,
         join_code: code,
         // Real-looking but suffixed, so they don't point at strangers' work.
-        devpost_url: `https://devpost.com/software/${slug}-hfh26`,
-        github_urls: [`https://github.com/${slug}-hfh26/${slug}`],
+        devpost_url: `https://devpost.com/software/${slug}-awsa10`,
+        github_urls: [`https://github.com/${slug}-awsa10/${slug}`],
         contact_email: captain.email,
         // 555-01xx is reserved for fiction.
         contact_phone: `(408) 555-01${String(i % 100).padStart(2, "0")}`,
@@ -720,20 +723,21 @@ async function main() {
   );
 
   // Version 1 is published; version 2 is a regenerated draft that differs,
-  // as a re-run of the generator would.
+  // as a re-run of the generator would. Times are minutes relative to the
+  // start of judging, so moving JUDGING_STARTS_AT moves them too.
   const schedules = [
     {
       version: 1,
       status: "published" as const,
       rand: prng(101),
-      generatedAt: "09:35",
-      publishedAt: "09:40",
+      generatedAt: -25,
+      publishedAt: -20,
     },
     {
       version: 2,
       status: "draft" as const,
       rand: prng(202),
-      generatedAt: "09:52",
+      generatedAt: -8,
       publishedAt: null,
     },
   ];
@@ -741,7 +745,6 @@ async function main() {
   for (const s of schedules) {
     const result = buildSchedule(teams, panelSponsors, s.rand);
     const scheduleId = seedId(`${EVENT_SLUG}/schedule/v${s.version}`);
-    const day = JUDGING_STARTS_AT.slice(0, 10);
     await upsert("schedules", [
       {
         id: scheduleId,
@@ -750,8 +753,11 @@ async function main() {
         round: 1,
         status: s.status,
         stats: result.stats as Insert<"schedules">["stats"],
-        generated_at: `${day}T${s.generatedAt}:00-08:00`,
-        published_at: s.publishedAt ? `${day}T${s.publishedAt}:00-08:00` : null,
+        generated_at: addMinutes(JUDGING_STARTS_AT, s.generatedAt),
+        published_at:
+          s.publishedAt === null
+            ? null
+            : addMinutes(JUDGING_STARTS_AT, s.publishedAt),
       },
     ]);
     const slotIds = Array.from({ length: result.nSlots }, (_, i) =>
