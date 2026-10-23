@@ -15,7 +15,7 @@
     "db:types": "supabase gen types typescript --local > lib/database.types.ts",
     "seed": "node --env-file-if-exists=.env.local scripts/seed.ts",
     "test:rls": "node scripts/test-rls.mjs",
-    "test:smoke": "next build && node scripts/smoke.mjs"
+    "test:smoke": "next build && node --env-file-if-exists=.env.local scripts/smoke.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

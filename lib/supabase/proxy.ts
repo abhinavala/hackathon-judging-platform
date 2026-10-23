@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/env";
 import { isSessionCookie, readClaims } from "@/lib/supabase/claims";
+import { rolesRequiredFor } from "@/lib/route-guards";
 
 // Paths an anonymous visitor may load. Everything else requires a session,
 // including paths that don't exist, so an anonymous visitor can't tell real
@@ -22,9 +23,14 @@ function isPublic(pathname: string) {
   );
 }
 
-// Refreshes the auth cookie on every request, deletes it if it's corrupt, and
-// bounces anonymous visitors to /login. This is an optimistic check only;
-// authorization is enforced by the route-group guards and, ultimately, by RLS.
+// Not a route. Rewriting a role mismatch here makes Next render its genuine
+// not-found response, status 404 included, indistinguishable from any other
+// missing path.
+const NOT_FOUND_PATH = "/_not-found-role-gate";
+
+// Refreshes the auth cookie on every request, deletes it if it's corrupt,
+// bounces anonymous visitors to /login, and is THE gate for role-scoped route
+// groups (see lib/route-guards.ts). Data access is still enforced by RLS.
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -54,7 +60,8 @@ export async function updateSession(request: NextRequest) {
 
   // Do not put code between createServerClient and getClaims(): getClaims()
   // is what triggers the token refresh and the setAll() above.
-  const { status } = await readClaims(supabase);
+  const auth = await readClaims(supabase);
+  const { status } = auth;
 
   // A session cookie that still has a value but yields no session is one
   // auth-js couldn't parse; treat it like a rejected token.
@@ -86,6 +93,30 @@ export async function updateSession(request: NextRequest) {
     // Carry over any cookie changes (a refreshed, cleared or deleted session).
     response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
     return redirect;
+  }
+
+  // Role gate. This has to happen here rather than in the route-group
+  // layouts: with Cache Components the response commits to 200 before a
+  // layout's notFound() runs, turning a role mismatch into a "soft" 404.
+  const required = rolesRequiredFor(request.nextUrl.pathname);
+  if (required && auth.status === "signed-in") {
+    // Read live from profiles through RLS (own row only), never from a JWT
+    // claim, so a roster change applies on the next request. A failed read
+    // throws: fail closed.
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("user_id", auth.claims.sub)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data || !required.includes(data.role)) {
+      const url = request.nextUrl.clone();
+      url.pathname = NOT_FOUND_PATH;
+      url.search = "";
+      const notFound = NextResponse.rewrite(url);
+      response.cookies.getAll().forEach((c) => notFound.cookies.set(c));
+      return notFound;
+    }
   }
 
   return response;
