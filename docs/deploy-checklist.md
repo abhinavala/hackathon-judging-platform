@@ -40,10 +40,18 @@ email_sent = 1000`. Production doesn't send through Supabase's mailer.
   - No Supabase "Redirect URLs" entry is needed for either: the link points
     at our own `/auth/callback`, which verifies the `token_hash` server-side.
     Supabase's redirect allowlist only applies to links Supabase sends itself.
-- [ ] **Vercel Deployment Protection on previews.** Previews sit behind
-      Vercel login by default, so a sign-in link opened on a phone hits that
-      wall first. Fine for us testing; turn it off (or use a bypass) if
-      someone outside the team needs to sign in on a preview.
+- [ ] **Vercel Deployment Protection.** Observed on this project: the
+      production domain (`hackathon-judging-platform.vercel.app`) is public;
+      every per-deployment URL (`hackathon-judging-platform-<hash>-...vercel.app`),
+      previews included, redirects to Vercel login. So a sign-in link opened
+      on a phone against a preview hits that wall first. Fine for us testing;
+      turn it off or use a bypass if someone outside the team needs a preview.
+      `vercel curl` created a "Protection Bypass for Automation" token on the
+      project (used for scripted preview checks); rotate or revoke it in
+      Project Settings, Deployment Protection, if it is no longer wanted.
+- [ ] **Production branch is `main`.** A brand-new Vercel project promotes its
+      first deployment to production whatever the branch: here PR #1's
+      `phase-1` build became production. The next merge to `main` replaces it.
 - [ ] `AUTH_LINK_SENDER=appsScript` for production once the Apps Script web
       app exists. The `console` and `mailpit` senders refuse to run in
       production; unset also fails. Until then, production renders `/login`
