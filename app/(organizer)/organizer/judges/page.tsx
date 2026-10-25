@@ -10,6 +10,10 @@ import { preflight } from "@/lib/scheduler";
 import { Flash, Section, button, input, table } from "../_ui/ui";
 import { addJudge, deleteJudge, updateJudge } from "./actions";
 
+// Reads the organizer's session; blocks on the server rather than
+// prerendering (as the guard layout does).
+export const instant = false;
+
 export default async function JudgesPage({
   searchParams,
 }: PageProps<"/organizer/judges">) {

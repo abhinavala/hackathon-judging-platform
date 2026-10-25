@@ -11,6 +11,10 @@ import { preflight } from "@/lib/scheduler";
 import { Flash, Section, button, input, table } from "../_ui/ui";
 import { generateDraft } from "./actions";
 
+// Reads the organizer's session; blocks on the server rather than
+// prerendering (as the guard layout does).
+export const instant = false;
+
 export default async function GeneratePage({
   searchParams,
 }: PageProps<"/organizer/generate">) {

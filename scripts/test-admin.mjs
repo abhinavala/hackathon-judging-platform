@@ -646,6 +646,37 @@ async function run() {
     text(page).includes("Best in Play (Top Game)"),
     "import page renders with the event's tracks",
   );
+  // The screen posts to this JSON endpoint (a route handler, not a server
+  // action: see app/(organizer)/organizer/import/run/route.ts).
+  const runForm = () => {
+    const fd = new FormData();
+    fd.set("intent", "preview");
+    fd.set("file", new Blob([sample], { type: "text/csv" }), "responses.csv");
+    return fd;
+  };
+  const run = await fetch(`${BASE}/organizer/import/run`, {
+    method: "POST",
+    body: runForm(),
+    headers: { cookie: org.cookie },
+  });
+  const runJson = await run.json();
+  check(
+    run.status === 200 &&
+      runJson.read?.columns.shape === "old" &&
+      runJson.plan?.needsName.length === 8,
+    "import endpoint: an organizer's upload returns the plan as JSON",
+  );
+  const denied = await fetch(`${BASE}/organizer/import/run`, {
+    method: "POST",
+    body: runForm(),
+    headers: { cookie: participant.cookie },
+    redirect: "manual",
+  });
+  check(
+    denied.status === 404,
+    "import endpoint: a participant gets a real 404",
+    String(denied.status),
+  );
   const event = { id: ev.id, timezone: "America/Los_Angeles" };
   let prepared = await prepareImport(org.client, event, sample);
   const { read, plan } = prepared;

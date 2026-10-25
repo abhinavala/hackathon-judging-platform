@@ -6,6 +6,10 @@ import { clock } from "@/lib/admin/time";
 import { Flash, Section, button, table } from "../../_ui/ui";
 import { publishSchedule } from "./actions";
 
+// Reads the organizer's session; blocks on the server rather than
+// prerendering (as the guard layout does).
+export const instant = false;
+
 // The last check between a bad schedule and 250 people being sent to the
 // wrong place. Every warning from the spec is shown and must be explicitly
 // acknowledged to publish; the organizer decides, the system advises.

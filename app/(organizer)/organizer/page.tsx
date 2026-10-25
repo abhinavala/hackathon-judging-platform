@@ -10,6 +10,10 @@ import {
 import { preflight } from "@/lib/scheduler";
 import { Section, table } from "./_ui/ui";
 
+// Reads the organizer's session; blocks on the server rather than
+// prerendering (as the guard layout does).
+export const instant = false;
+
 // Plain overview: what the event has, and where to go next.
 export default async function OrganizerPage() {
   const db = await adminDb();

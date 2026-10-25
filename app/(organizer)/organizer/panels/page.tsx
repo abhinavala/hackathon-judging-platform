@@ -7,6 +7,10 @@ import {
 import { Flash, Section, button, input, table } from "../_ui/ui";
 import { addStation, deleteStation, updateStation } from "./actions";
 
+// Reads the organizer's session; blocks on the server rather than
+// prerendering (as the guard layout does).
+export const instant = false;
+
 export default async function StationsPage({
   searchParams,
 }: PageProps<"/organizer/panels">) {

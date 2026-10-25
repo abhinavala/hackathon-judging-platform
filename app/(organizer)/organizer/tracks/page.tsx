@@ -7,6 +7,10 @@ import {
 import { Flash, Section, button, input, table } from "../_ui/ui";
 import { addTrack, deleteTrack, updateTrack } from "./actions";
 
+// Reads the organizer's session; blocks on the server rather than
+// prerendering (as the guard layout does).
+export const instant = false;
+
 export default async function TracksPage({
   searchParams,
 }: PageProps<"/organizer/tracks">) {

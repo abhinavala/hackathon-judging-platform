@@ -1,6 +1,10 @@
 import { adminDb, currentEvent, loadTracks } from "@/lib/admin/data";
 import { ImportFlow } from "./import-flow";
 
+// Reads the organizer's session; blocks on the server rather than
+// prerendering (as the guard layout does).
+export const instant = false;
+
 // Teams CSV import from the Google Form export (the check-in fallback).
 export default async function ImportPage() {
   const db = await adminDb();

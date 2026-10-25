@@ -108,6 +108,17 @@ try {
   await expectStatus("/team", judge.cookie, 200); // any signed-in user
   await expectStatus("/organizer", organizer.cookie, 200);
   await expectStatus("/judge", organizer.cookie, 404);
+  // A POST to a gated route is refused with a 404 too (not Next's 400).
+  const post = await fetch(`${base}/organizer`, {
+    method: "POST",
+    body: new FormData(),
+    headers: { cookie: participant.cookie },
+    redirect: "manual",
+  });
+  if (post.status !== 404)
+    throw new Error(
+      `POST /organizer as participant: expected 404, got ${post.status}`,
+    );
 
   // The role is read live, not from the JWT: promoting someone who is
   // already signed in takes effect on their next request, with the same

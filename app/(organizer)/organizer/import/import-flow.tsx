@@ -1,7 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
-import { importTeams } from "./actions";
+import { useState } from "react";
 import { emptyImportState, type ImportState } from "./state";
 import type { ImportedTeam, TeamChanges } from "@/lib/csv/teams-import";
 
@@ -47,12 +46,43 @@ function describe(c: TeamChanges): string[] {
   return out;
 }
 
+// Posts to ./run (a JSON route handler, see run/route.ts) and keeps the
+// state here. Organizer-only, so it relies on JavaScript.
 export function ImportFlow() {
-  const [state, action, pending] = useActionState<ImportState, FormData>(
-    importTeams,
-    emptyImportState,
-  );
+  const [state, setState] = useState<ImportState>(emptyImportState);
+  const [pending, setPending] = useState(false);
   const { read, plan, result } = state;
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const submitter = (event.nativeEvent as SubmitEvent)
+      .submitter as HTMLButtonElement | null;
+    const body = new FormData(event.currentTarget);
+    if (submitter?.name) body.set(submitter.name, submitter.value);
+    if (state.fileName) body.set("fileName", state.fileName);
+    setPending(true);
+    try {
+      const res = await fetch("/organizer/import/run", {
+        method: "POST",
+        body,
+      });
+      setState(
+        res.ok
+          ? await res.json()
+          : {
+              ...state,
+              error: `The server answered ${res.status}. Nothing was imported.`,
+            },
+      );
+    } catch {
+      setState({
+        ...state,
+        error: "Couldn't reach the server. Nothing was imported.",
+      });
+    } finally {
+      setPending(false);
+    }
+  }
 
   if (result) {
     return (
@@ -73,15 +103,19 @@ export function ImportFlow() {
             </ul>
           </div>
         )}
-        <form action={action}>
-          <button className={button}>Import another file</button>
-        </form>
+        <button
+          type="button"
+          onClick={() => setState(emptyImportState)}
+          className={button}
+        >
+          Import another file
+        </button>
       </div>
     );
   }
 
   return (
-    <form action={action} className="space-y-6">
+    <form onSubmit={submit} className="space-y-6">
       {state.csv && <input type="hidden" name="csv" value={state.csv} />}
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <input

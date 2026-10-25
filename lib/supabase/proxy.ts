@@ -138,6 +138,14 @@ export async function updateSession(request: NextRequest) {
     const role = await readRole(supabase, auth.claims.sub);
     if (role === "unavailable") return accessUnavailable();
     if (!role || !required.includes(role)) {
+      // A POST (server action, form, the import endpoint) can't be rewritten
+      // to the not-found page: Next treats the rewritten request as a server
+      // action and answers 400. Refuse it with a plain 404 instead.
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        const refused = new NextResponse("Not found", { status: 404 });
+        response.cookies.getAll().forEach((c) => refused.cookies.set(c));
+        return refused;
+      }
       const url = request.nextUrl.clone();
       url.pathname = NOT_FOUND_PATH;
       url.search = "";

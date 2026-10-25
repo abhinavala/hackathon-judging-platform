@@ -3,6 +3,10 @@ import { adminDb, currentEvent, loadSchedules } from "@/lib/admin/data";
 import { clock } from "@/lib/admin/time";
 import { Flash, Section, table } from "../_ui/ui";
 
+// Reads the organizer's session; blocks on the server rather than
+// prerendering (as the guard layout does).
+export const instant = false;
+
 export default async function SchedulesPage({
   searchParams,
 }: PageProps<"/organizer/schedules">) {
