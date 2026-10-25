@@ -338,6 +338,9 @@ isOneToOne: false
               "body": string,"created_at": string,"level": Database["public"]['Enums']["announcement_level"]
             }[]
                            },
+"board_view":
+{ Args: { "p_event_slug": string }; Returns: Json
+                           },
 "is_organizer":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
