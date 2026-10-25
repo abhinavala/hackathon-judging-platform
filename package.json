@@ -2,6 +2,7 @@
   "name": "hackathon-judging-platform",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -15,7 +16,8 @@
     "db:types": "supabase gen types typescript --local > lib/database.types.ts",
     "seed": "node --env-file-if-exists=.env.local scripts/seed.mts",
     "test:rls": "node scripts/test-rls.mjs",
-    "test:smoke": "next build && node --env-file-if-exists=.env.local scripts/smoke.mjs"
+    "test:smoke": "next build && node --env-file-if-exists=.env.local scripts/smoke.mjs",
+    "test:scheduler": "node --test \"tests/scheduler/*.test.ts\""
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
