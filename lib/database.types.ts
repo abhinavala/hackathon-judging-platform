@@ -368,6 +368,9 @@ isOneToOne: false
 { Args: { "p_code": string }; Returns: {
               "ends_at": string,"location_text": string,"panel_label": string,"slot_index": number,"starts_at": string,"team_name": string,"track_names": (string)[]
             }[]
+                           },
+"team_view":
+{ Args: { "p_code": string }; Returns: Json
                            }
           }
           Enums: {

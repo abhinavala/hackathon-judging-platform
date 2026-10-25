@@ -99,13 +99,26 @@ try {
   const participant = await signIn("smoke-participant@example.test");
   const judge = await signIn("smoke-judge@example.test", "judge");
   const organizer = await signIn("smoke-organizer@example.test", "organizer");
-  await expectStatus("/team", participant.cookie, 200);
+  await expectStatus("/team/none", participant.cookie, 200);
+  // /team is a real 307: to the team's view, or to /team/none without a team.
+  const teamRedirect = await fetch(`${base}/team`, {
+    headers: { cookie: participant.cookie },
+    redirect: "manual",
+  });
+  if (
+    teamRedirect.status !== 307 ||
+    teamRedirect.headers.get("location") !== "/team/none"
+  ) {
+    throw new Error(
+      `/team without a team: expected 307 -> /team/none, got ${teamRedirect.status} ${teamRedirect.headers.get("location")}`,
+    );
+  }
   await expectStatus("/judge", participant.cookie, 404);
   await expectStatus("/organizer", participant.cookie, 404);
   await expectStatus("/does-not-exist", participant.cookie, 404);
   await expectStatus("/judge", judge.cookie, 200);
   await expectStatus("/organizer", judge.cookie, 404);
-  await expectStatus("/team", judge.cookie, 200); // any signed-in user
+  await expectStatus("/team/none", judge.cookie, 200); // any signed-in user
   await expectStatus("/organizer", organizer.cookie, 200);
   await expectStatus("/judge", organizer.cookie, 404);
   // A POST to a gated route is refused with a 404 too (not Next's 400).

@@ -842,6 +842,115 @@ async function run() {
     "re-importing the same file matches every team by submitter email and changes nothing",
   );
 
+  // 10. The team view (Phase 4), anonymously, against published v3.
+  const { data: tv } = await db
+    .from("teams")
+    .select("id, name, join_code")
+    .eq("name", "ShelterLink")
+    .single();
+  const code = tv.join_code;
+  const visible = (html) =>
+    text(html.replace(/<script[\s\S]*?<\/script>/g, ""));
+  const loose = await get(`/t/${code.toLowerCase().replace("-", "")}`);
+  check(
+    loose.status === 307 && loose.location?.endsWith(`/t/${code}`),
+    "team view: a loosely typed code redirects to /t/ABCD-1234",
+    `${loose.status} ${loose.location}`,
+  );
+  let tvPage = await get(`/t/${code}`);
+  let tvText = visible(tvPage.html);
+  check(
+    tvPage.status === 200 && tvText.includes("ShelterLink"),
+    "team view: renders for an anonymous visitor (no sign-in)",
+  );
+  check(
+    /Sunday, November 8/.test(tvText) && /PST/.test(tvText),
+    "team view: far ahead it shows the day, with times labelled PST",
+  );
+  check(
+    tvText.includes("Schedule v3"),
+    "team view: names the published version (v3)",
+  );
+  check(
+    /Main hall, table \d/.test(tvText),
+    "team view: shows the station's location text",
+  );
+  const entry = await get(`/t/go?code=${code.toLowerCase().replace("-", "")}`);
+  check(
+    entry.status === 307 && entry.location?.endsWith(`/t/${code}`),
+    "code entry: the form (GET /t/go) redirects to the team view",
+    `${entry.status} ${entry.location}`,
+  );
+  const badEntry = await get("/t/go?code=nope");
+  check(
+    badEntry.status === 307 &&
+      badEntry.location === "/t?code=nope&error=format",
+    "code entry: a malformed code goes back to the form",
+    `${badEntry.status} ${badEntry.location}`,
+  );
+  check(
+    visible((await get(badEntry.location)).html).includes(
+      "“nope” isn't a join code.",
+    ),
+    "code entry: and the form explains the format",
+  );
+  check(
+    visible((await get("/t/ZZZZ-0000")).html).includes(
+      "We don't recognise the code ZZZZ-0000.",
+    ),
+    "team view: an unknown code says so, with a way to retype it",
+  );
+  const dataRes = await fetch(`${BASE}/t/${code}/data`);
+  const dataJson = await dataRes.json();
+  check(
+    dataRes.status === 200 &&
+      dataJson.view.found === true &&
+      typeof dataJson.serverNow === "number" &&
+      dataJson.view.slots.length === 2,
+    "team view: the polling endpoint returns the view and the server time",
+  );
+
+  const { data: v3 } = await db
+    .from("schedules")
+    .select("id")
+    .eq("version", 3)
+    .single();
+  await db
+    .from("assignments")
+    .update({ status: "cancelled" })
+    .eq("schedule_id", v3.id)
+    .eq("team_id", tv.id);
+  tvText = visible((await get(`/t/${code}`)).html);
+  check(
+    tvText.includes("Your team isn't in the judging schedule.") &&
+      tvText.includes("help desk"),
+    "team view: a team not in the published schedule is told so, and who to see",
+  );
+  await db
+    .from("assignments")
+    .update({ status: "scheduled" })
+    .eq("schedule_id", v3.id)
+    .eq("team_id", tv.id);
+
+  await db.from("schedules").update({ status: "archived" }).eq("id", v3.id);
+  tvText = visible((await get(`/t/${code}`)).html);
+  check(
+    tvText.includes("The judging schedule isn't published yet.") &&
+      tvText.includes(
+        "Check back closer to 10:00 AM PST on Sunday, November 8.",
+      ),
+    "team view: before publishing it says when to check back (from the latest draft)",
+    tvText.slice(0, 160),
+  );
+  await db.from("schedules").update({ status: "published" }).eq("id", v3.id);
+
+  const mine = await get("/team", participant.cookie);
+  check(
+    mine.status === 307 && mine.location?.endsWith(`/t/${code}`),
+    "/team sends a signed-in participant to their team's view",
+    `${mine.status} ${mine.location}`,
+  );
+
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 }
 
