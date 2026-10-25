@@ -92,14 +92,30 @@ assert every time:
 - at two **distinct** panels
 - in two **distinct** slots
 - no panel has two teams in one slot
-- `teamsPerPanel` max − min ≤ 1
 - `nSlots` ≥ max panel degree
 - the run completes in < 1s
 
-Then a fixed-seed regression test on the real configuration — 60 teams,
-`{AWS: 36, A10: 24, both: 12}`, 4 AWS + 3 A10 + 9 unaffiliated — asserting
-**60/60 teams fully covered, 54/54 track-seats met, 15 slots, minimum gap ≥ 4.**
-The Python produces exactly this; the port should too.
+**Panel balance is not a universal invariant.** `teamsPerPanel` max − min ≤ 1
+is asserted only on the unconstrained path (no tracks) and on the real
+configuration below. In track-aware runs Stage 1 deliberately puts coverage
+first: it filters to the best-covering panel pairs, uses load only as a
+tie-break, and relaxes the degree cap when the last teams have no legal pair.
+Over 600 randomised scenarios the Python's spread ran from 0 to 17, with every
+schedule valid. **Operationally: uneven sponsor demand means some panels see
+noticeably fewer teams than others.** The preview should show teams per panel.
+
+Then a fixed-seed regression test on the real configuration: 60 teams,
+4 AWS + 3 A10 + 9 unaffiliated judges (8 panels). Two team mixes, both
+asserted against the Python's actual output:
+
+| Team mix | Covered | Track-seats | Slots | Min gap |
+|---|---|---|---|---|
+| **Explicit counts** (the real event's shape): AWS 36, A10 24, 12 wanting both, 12 neither | 60/60 | **60/60** | 15 | 5 |
+| **Random draw** `make_teams(60, {AWS: 0.6, A10: 0.4}, seed=1)` | 60/60 | **54/54** | 15 | 5 |
+
+The earlier "54/54" figure came from the random draw, not the explicit counts.
+Both meet the targets: every team fully covered, every track-seat met, 15
+slots, minimum gap ≥ 4. Panels are exactly balanced (15 each) in both.
 
 ---
 
@@ -186,8 +202,9 @@ All writes go through the service role, server-side, as with the seed.
 ## Acceptance criteria
 
 1. `npm run test:scheduler` — ≥200 randomised scenarios, zero invalid, < 1s each
-2. The fixed-seed regression matches the Python: 60/60 covered, 54/54 seats, 15
-   slots, min gap ≥ 4
+2. The fixed-seed regression matches the Python: 60/60 covered, every
+   track-seat met (60/60 for the explicit counts, 54/54 for the random draw),
+   15 slots, min gap ≥ 4
 3. Pre-flight check correctly flags an under-staffed sponsor track
 4. CSV import round-trips the Google Form export
 5. Generate → preview → publish works end to end against seeded data
