@@ -564,11 +564,70 @@ async function run() {
     "Best in Play (Top Game)",
   ];
   const { data: ev } = await db.from("events").select("id").single();
-  await db
-    .from("tracks")
-    .insert(
-      TRACKS.map((name, i) => ({ event_id: ev.id, name, sort_order: 10 + i })),
+  // Tracks, through the tracks screen: the import depends on them matching
+  // the form's checkbox labels exactly.
+  for (const [i, name] of TRACKS.entries()) {
+    r = await submit("/organizer/tracks", org.cookie, "Add track", {
+      name,
+      sponsor: "",
+      judgedLive: "on",
+      sortOrder: String(10 + i),
+    });
+    check(
+      flash(r.url) === `Added "${name}".`,
+      `tracks screen: add "${name}"`,
+      flash(r.url),
     );
+  }
+  // judged_live = false: the scheduler and the pre-flight ignore that sponsor.
+  const { data: awsTrack } = await db
+    .from("tracks")
+    .select("id, name, sort_order")
+    .eq("sponsor", "AWS")
+    .single();
+  const awsRow = (html) =>
+    text(html)
+      .match(/AWS (\d+) (\d+) (\d+) (yes|NO)/)
+      ?.slice(1, 3)
+      .join("/");
+  check(
+    awsRow((await get("/organizer/judges", org.cookie)).html) === "4/36",
+    "pre-flight counts 36 teams wanting AWS",
+  );
+  r = await submit(
+    "/organizer/tracks",
+    org.cookie,
+    `value="${awsTrack.id}"`,
+    {
+      id: awsTrack.id,
+      name: awsTrack.name,
+      sponsor: "AWS",
+      sortOrder: String(awsTrack.sort_order),
+    },
+    { keepChecked: false },
+  );
+  check(
+    flash(r.url) === `Saved "${awsTrack.name}".`,
+    "tracks screen: untick judged live on the AWS track",
+  );
+  const offline = awsRow((await get("/organizer/judges", org.cookie)).html);
+  check(
+    offline === "4/0",
+    "an offline-judged track no longer counts as demand",
+    offline,
+  );
+  await submit("/organizer/tracks", org.cookie, `value="${awsTrack.id}"`, {
+    id: awsTrack.id,
+    name: awsTrack.name,
+    sponsor: "AWS",
+    judgedLive: "on",
+    sortOrder: String(awsTrack.sort_order),
+  });
+  check(
+    awsRow((await get("/organizer/judges", org.cookie)).html) === "4/36",
+    "re-ticking it restores the demand",
+  );
+
   const sample = readFileSync(
     new URL("../fixtures/google-form-responses.sample.csv", import.meta.url),
     "utf8",
@@ -689,6 +748,58 @@ async function run() {
     gen.includes("Imported Team L16"),
     "imported teams appear on the generate screen, checked in",
   );
+
+  // Deleting a track teams selected asks first, then removes the selections.
+  const { data: gameTrack } = await db
+    .from("tracks")
+    .select("id")
+    .eq("name", "Best in Play (Top Game)")
+    .single();
+  const { count: picks } = await db
+    .from("team_tracks")
+    .select("team_id", { count: "exact", head: true })
+    .eq("track_id", gameTrack.id);
+  r = await submit(
+    "/organizer/tracks",
+    org.cookie,
+    `name="id" value="${gameTrack.id}"/><button`,
+    {},
+  );
+  check(
+    r.url?.searchParams.get("confirmDelete") === gameTrack.id,
+    `tracks screen: deleting a track ${picks} teams chose asks for confirmation first`,
+  );
+  const { count: stillThere } = await db
+    .from("tracks")
+    .select("id", { count: "exact", head: true })
+    .eq("id", gameTrack.id);
+  check(stillThere === 1, "and deletes nothing yet");
+  const confirmPage = await get(
+    `/organizer/tracks?confirmDelete=${gameTrack.id}`,
+    org.cookie,
+  );
+  check(
+    text(confirmPage.html).includes(
+      `${picks} teams have selected “Best in Play (Top Game)”`,
+    ),
+    "the confirmation names the track and the team count",
+  );
+  r = await submit(
+    `/organizer/tracks?confirmDelete=${gameTrack.id}`,
+    org.cookie,
+    'name="confirm" value="yes"',
+    {},
+  );
+  check(
+    flash(r.url) === `Track deleted and removed from ${picks} teams.`,
+    "confirming deletes it",
+    flash(r.url),
+  );
+  const { count: orphanPicks } = await db
+    .from("team_tracks")
+    .select("team_id", { count: "exact", head: true })
+    .eq("track_id", gameTrack.id);
+  check(orphanPicks === 0, "and those teams' selections are gone");
 
   prepared = await prepareImport(org.client, event, sample);
   check(

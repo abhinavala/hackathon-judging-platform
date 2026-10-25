@@ -135,9 +135,10 @@ export async function loadTracks(db: Db, eventId: string) {
   return must(
     await db
       .from("tracks")
-      .select("id, name, sponsor, sort_order")
+      .select("id, name, sponsor, judged_live, sort_order")
       .eq("event_id", eventId)
-      .order("sort_order"),
+      .order("sort_order")
+      .order("name"),
     "tracks",
   );
 }
@@ -172,9 +173,15 @@ export async function loadTeams(db: Db, eventId: string): Promise<Team[]> {
       name: t.name,
       checkedIn: t.checked_in_at !== null,
       tracks: mine.map((x) => x.name),
+      // Only live-judged tracks need a sponsor's judge in the room: a track
+      // decided offline (judged_live = false) is ignored by the scheduler
+      // and the pre-flight check, as the schema intends.
       sponsors: [
         ...new Set(
-          mine.map((x) => x.sponsor).filter((s): s is string => s !== null),
+          mine
+            .filter((x) => x.judged_live)
+            .map((x) => x.sponsor)
+            .filter((s): s is string => s !== null),
         ),
       ],
     };
