@@ -18,7 +18,8 @@
     "test:rls": "node scripts/test-rls.mjs",
     "test:smoke": "next build && node --env-file-if-exists=.env.local scripts/smoke.mjs",
     "test:scheduler": "node --test \"tests/scheduler/*.test.ts\"",
-    "test:unit": "node --test \"tests/**/*.test.ts\""
+    "test:unit": "node --test \"tests/**/*.test.ts\"",
+    "test:admin": "node --env-file-if-exists=.env.local scripts/test-admin.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
