@@ -33,8 +33,8 @@ export default async function OrganizerLayout({
 }) {
   await requireRole(...ORGANIZER_ROLES);
   return (
-    <div className="mx-auto w-full max-w-6xl p-6">
-      <nav className="mb-6 flex flex-wrap gap-4 border-b pb-3 text-sm">
+    <div className="mx-auto w-full max-w-6xl p-6 print:max-w-none print:p-0">
+      <nav className="mb-6 print:hidden flex flex-wrap gap-4 border-b pb-3 text-sm">
         {NAV.map(([href, label]) => (
           <Link
             key={href}

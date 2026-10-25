@@ -55,6 +55,10 @@ export default async function SchedulePage({
         <a href={`/organizer/schedules/${id}/export`} className="underline">
           Download CSV (station × time)
         </a>
+        {" · "}
+        <a href={`/organizer/schedules/${id}/print`} className="underline">
+          Printable schedule
+        </a>
       </p>
       <Flash params={query} />
 

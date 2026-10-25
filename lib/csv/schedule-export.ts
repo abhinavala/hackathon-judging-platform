@@ -30,12 +30,17 @@ export function slotLabel(startsAt: string | Date, timeZone: string): string {
   }).format(new Date(startsAt));
 }
 
-export function scheduleToCsv({
+/**
+ * The station x time grid as plain strings: the header row, then one row per
+ * station. The CSV export and the printed schedule both render THIS, so the
+ * paper on the wall and the spreadsheet can't drift apart.
+ */
+export function scheduleGrid({
   stations,
   slots,
   cells,
   timeZone,
-}: ScheduleExport): string {
+}: ScheduleExport): { header: string[]; rows: string[][] } {
   const orderedSlots = [...slots].sort((a, b) => a.index - b.index);
   const withJudges = stations.some((s) => s.judges?.length);
   const at = new Map<string, string>();
@@ -52,11 +57,14 @@ export function scheduleToCsv({
     ...orderedSlots.map((s) => slotLabel(s.startsAt, timeZone)),
   ];
   const rows = stations.map((st) => [
-    spreadsheetSafe(st.label),
-    ...(withJudges ? [spreadsheetSafe((st.judges ?? []).join(", "))] : []),
-    ...orderedSlots.map((sl) =>
-      spreadsheetSafe(at.get(`${st.id}|${sl.id}`) ?? ""),
-    ),
+    st.label,
+    ...(withJudges ? [(st.judges ?? []).join(", ")] : []),
+    ...orderedSlots.map((sl) => at.get(`${st.id}|${sl.id}`) ?? ""),
   ]);
-  return formatCsv([header, ...rows]);
+  return { header, rows };
+}
+
+export function scheduleToCsv(schedule: ScheduleExport): string {
+  const { header, rows } = scheduleGrid(schedule);
+  return formatCsv([header, ...rows.map((r) => r.map(spreadsheetSafe))]);
 }
