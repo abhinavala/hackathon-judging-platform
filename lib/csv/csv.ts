@@ -5,7 +5,20 @@
 
 /** Parses CSV text into rows of fields. Tolerates a UTF-8 BOM and a trailing newline. */
 export function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
+  return parseCsvRecords(text).map((r) => r.fields);
+}
+
+/**
+ * Like parseCsv, with the 1-based physical line each record starts on. A
+ * quoted field can contain line breaks (Google Forms puts a question's help
+ * text inside the header cell), so record N is not line N.
+ */
+export function parseCsvRecords(
+  text: string,
+): { fields: string[]; line: number }[] {
+  const records: { fields: string[]; line: number }[] = [];
+  let line = 1;
+  let recordLine = 1;
   let row: string[] = [];
   let field = "";
   let quoted = false;
@@ -17,12 +30,15 @@ export function parseCsv(text: string): string[][] {
   };
   const endRow = () => {
     endField();
-    rows.push(row);
+    records.push({ fields: row, line: recordLine });
     row = [];
   };
 
   for (; i < text.length; i++) {
     const ch = text[i];
+    // Count physical lines everywhere, quoted or not; a CRLF outside quotes
+    // is counted below, where its \n is skipped.
+    if (ch === "\n") line++;
     if (quoted) {
       if (ch === '"') {
         if (text[i + 1] === '"') {
@@ -39,15 +55,21 @@ export function parseCsv(text: string): string[][] {
     } else if (ch === ",") {
       endField();
     } else if (ch === "\r" || ch === "\n") {
-      if (ch === "\r" && text[i + 1] === "\n") i++;
+      if (ch === "\r" && text[i + 1] === "\n") {
+        i++;
+        line++;
+      } else if (ch === "\r") {
+        line++;
+      }
       endRow();
+      recordLine = line;
     } else {
       field += ch;
     }
   }
   if (quoted) throw new Error("CSV ends inside a quoted field");
   if (field !== "" || row.length > 0) endRow();
-  return rows;
+  return records;
 }
 
 /** Formats rows as CSV with CRLF line endings, quoting only where needed. */
