@@ -47,7 +47,7 @@ def track_aware_inputs(n=60):
 
 
 def unconstrained_inputs():
-    cases = [(60, 12, 206)]  # the Python edge_color produces an invalid schedule here
+    cases = [(60, 12, 206)]  # double-booked a panel before the edge_color path-flip fix
     rng = random.Random(7)
     for _ in range(23):
         cases.append((rng.choice([45, 52, 60, 64, 70]), rng.choice([7, 8, 9, 10, 11, 12]), rng.randint(0, 999)))

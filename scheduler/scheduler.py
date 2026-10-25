@@ -105,6 +105,18 @@ def edge_color(edges, n_teams, n_panels, n_colors):
                 if want not in at_p[node]:
                     break
 
+        # Clear every edge on the path BEFORE recolouring any of them.
+        # Recolouring in sequence corrupts the occupancy maps: edge N moves
+        # into a colour, overwriting edge N+1's entry, and edge N+1's own
+        # recolour then deletes edge N's entry and marks the colour free
+        # while it is still in use.
+        for edge, c in path:
+            t2, p2 = edge
+            old_c = color_of.get(edge)
+            if old_c is not None:
+                at_t[t2].pop(old_c, None); at_p[p2].pop(old_c, None)
+                free_t[t2].add(old_c); free_p[p2].add(old_c)
+                del color_of[edge]
         for edge, c in path:
             recolor(edge, beta if c == alpha else alpha)
         recolor(e, alpha)

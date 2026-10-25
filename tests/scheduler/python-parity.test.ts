@@ -1,8 +1,8 @@
 // The port against the Python reference, output for output. goldens.json is
 // produced by tests/scheduler/make_goldens.py running scheduler/*.py
-// unmodified. "If the TypeScript disagrees with the Python, the TypeScript is
-// wrong", with one documented exception: the Python's edge_color bug (see
-// lib/scheduler/color.ts), where the Python's output is itself invalid.
+// unmodified. If the TypeScript disagrees with the Python, the TypeScript is
+// wrong. (The one sanctioned change, the edge_color path-flip fix, is in both;
+// see lib/scheduler/color.ts.)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -83,15 +83,8 @@ for (const [id, g] of Object.entries(goldens.plain)) {
     new PyRandom(seed).shuffle(edges);
     const colored = edgeColor(edges, T, D, g.nColors);
     assert.deepEqual(verify(colored, T, D), [], "the port's colouring is valid");
-    if (g.errs.length === 0) {
-      assert.deepEqual(flatten(colored, D), g.colorOf, "identical colouring");
-      assert.deepEqual(flatten(improveSpacing(colored, g.nColors, D), D), g.spaced, "identical spacing");
-    } else {
-      // The documented exception: the Python double-books a panel here
-      // (edge_color's path flip corrupts its bookkeeping). The port must
-      // differ from it, and must be valid where it is not.
-      assert.notDeepEqual(flatten(colored, D), g.colorOf);
-      assert.ok(g.errs.length > 0, `Python errors: ${g.errs.join("; ")}`);
-    }
+    assert.deepEqual(g.errs, [], "the Python's colouring is valid");
+    assert.deepEqual(flatten(colored, D), g.colorOf, "identical colouring, same order");
+    assert.deepEqual(flatten(improveSpacing(colored, g.nColors, D), D), g.spaced, "identical spacing");
   });
 }

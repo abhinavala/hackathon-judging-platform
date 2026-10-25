@@ -12,17 +12,18 @@
 // at p, flip the alpha/beta alternating path starting at p, after which alpha
 // is free at p too.
 //
-// CORRECTION vs the Python: the reference flips the path by calling
-// recolor() on each edge in turn. recolor() deletes the edge's OLD colour key
-// at both ends, but at every interior vertex the previous edge has just moved
-// INTO that colour, so the delete removes the wrong entry and marks the colour
-// free while an edge still holds it. A later edge can then take that colour
-// and double-book a panel: the Python produces an invalid schedule for 60
-// teams on 12 panels, seed 206 (unconstrained pairing). Here every path edge
-// is uncoloured first and then recoloured. Measured against the Python over
-// 2,400 unconstrained runs and 600 track-aware solve() runs, this changes the
-// output ONLY in that invalid case; everywhere the Python is valid the result
-// is identical (tests/scheduler/python-parity.test.ts).
+// THE PATH FLIP (fixed in both the Python and this port): the original
+// reference flipped the path by calling recolor() on each edge in turn.
+// recolor() deletes the edge's OLD colour key at both ends, but at every
+// interior vertex the previous edge has just moved INTO that colour, so the
+// delete removed the wrong entry and marked the colour free while an edge
+// still held it. A later edge could then take that colour and double-book a
+// panel: for 60 teams on 12 panels, seed 206 (unconstrained pairing), panel
+// 11 got teams 15 and 19 in slot 0. Every path edge is now uncoloured first
+// (and removed from colorOf, so it is re-inserted at the end, exactly as the
+// Python's `del color_of[edge]` does; improve_spacing iterates in that
+// order) and then recoloured. Over 2,400 unconstrained runs the fix changed
+// only that invalid case.
 
 export type EdgeKey = number;
 
@@ -48,6 +49,7 @@ export function edgeColor(
     atP[p].delete(old);
     freeT[t].add(old);
     freeP[p].add(old);
+    colorOf.delete(key(t, p));
   };
   const setColor = ([t, p]: [number, number], c: number) => {
     colorOf.set(key(t, p), c);
@@ -97,7 +99,7 @@ export function edgeColor(
       }
     }
 
-    // Flip it: uncolour every path edge, then recolour (see CORRECTION above).
+    // Flip it: uncolour every path edge, then recolour (see THE PATH FLIP above).
     for (const [edge] of path) uncolor(edge);
     for (const [edge, c] of path) setColor(edge, c === alpha ? beta : alpha);
     setColor(e, alpha);
