@@ -6,6 +6,13 @@ live in [event-week-runbook.md](event-week-runbook.md).
 
 ## Supabase (hosted)
 
+- [ ] **Preview and Production must never share a database.** A preview
+      deploy writing to real event data is a bad failure mode generally and a
+      disaster during event week. Production uses `gujdsezfxjwhpatzqqgj`;
+      Preview needs its own project, with the Preview env vars pointed at it
+      and 0001-0003 pushed to it too. **Not yet true:** both currently use
+      the production project, because the free plan's two active projects
+      are taken (the other is the unrelated `sgdsbrakxxoatbrviqho`).
 - [ ] **The project is empty before the first `supabase db push`.** Check it
       yourself (`supabase migration list --linked` shows no remote
       migrations; `supabase inspect db table-stats --linked` shows no
