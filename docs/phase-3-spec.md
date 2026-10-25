@@ -136,6 +136,19 @@ entered — days before the event. Surface it on the judges page:
 Inverted, it's a recruiting target. This turns a day-of discovery into a
 Thursday email, which is the entire point.
 
+**The recruiting target must be computed iteratively, not with a formula.**
+The obvious one-shot answer, `ceil(teams_wanting_S / nSlots) − judges_from_S`,
+is wrong, because `nSlots` is not fixed: it is `ceil(2T / D)` with
+`D = floor(judges / 2)`, so adding judges can add a panel and cut **every**
+judge's slots. Counterexample: 60 teams, 16 judges (8 panels × 15 slots), one
+GCP judge, 45 teams wanting GCP. The formula says `ceil(45/15) − 1 = 2`. But
+18 judges make 9 panels with only 14 slots, and `3 × 14 = 42 < 45`: still
+short. The correct answer is 3 (19 judges, still 9 panels × 14 slots,
+`4 × 14 = 56`). `lib/scheduler/capacity.ts` therefore tries `k = 1, 2, …`,
+recomputing `nSlots` for each roster size, and returns the first `k` that
+clears the shortfall. Do not "simplify" it back to the formula;
+`tests/scheduler/preflight.test.ts` fails if you do.
+
 ---
 
 ## Part 3 — Data in and out
