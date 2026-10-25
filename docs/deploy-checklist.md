@@ -33,6 +33,18 @@ They replace `gujdsezfxjwhpatzqqgj` entirely.
       `reauthenticate()`. To invite someone, use
       `generateLink({ type: "invite" })` and deliver the link ourselves, never
       `inviteUserByEmail()`. (Audited 2026-10-25: none of the six present.)
+- [ ] **Turn OFF "Allow new users to sign up" on both projects** (the
+      project-wide switch; `[auth] enable_signup` locally). The publishable
+      key ships in the browser, so with it on anyone can call `signUp()`.
+      Tested locally on 2026-10-25 with it off: `auth.admin.generateLink()`
+      still creates brand-new users and their links verify; existing users,
+      `type: "invite"` links, the full `/login` -> console -> `token_hash` ->
+      `/me` path, resend, and the role-gate smoke test all pass; public
+      `signUp()` and `signInWithOtp()` for new addresses fail with
+      `signup_disabled`. **Do NOT disable the Email provider instead**
+      (`[auth.email] enable_signup` locally): that also blocks
+      `signInWithOtp()` for existing users ("Email logins are disabled"),
+      which would break the fallback-SMTP route.
 - [ ] **Email OTP length is 8 digits** on both projects (Supabase's default),
       not 6. We send `token_hash` links, not typed codes, so nothing reads it
       today; any future code-entry UI must accept 8 digits. (Local
