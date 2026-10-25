@@ -43,6 +43,55 @@ try {
     );
   }
 
+  // No-JavaScript sign-in: the form must work as plain HTML. The outcome is a
+  // redirect to /login?sent=... or ?error=..., and it must appear in the
+  // VISIBLE page, not only in React's script payload (a page that seems to
+  // do nothing makes people request again, replacing the link they got).
+  // Under `next start` the console sender refuses to run, so the expected
+  // outcome here is the visible "couldn't send" path.
+  const visible = (html) => html.replace(/<script[\s\S]*?<\/script>/g, "");
+  const loginHtml = await (await fetch(`${base}/login`)).text();
+  const loginForm = new FormData();
+  for (const m of loginHtml.matchAll(
+    /<input type="hidden" name="([^"]+)"(?: value="([^"]*)")?\/>/g,
+  )) {
+    loginForm.append(m[1], (m[2] ?? "").replaceAll("&quot;", '"'));
+  }
+  loginForm.append("email", "nojs-probe@example.test");
+  const posted = await fetch(`${base}/login`, {
+    method: "POST",
+    body: loginForm,
+    redirect: "manual",
+  });
+  const where = new URL(posted.headers.get("location") ?? "/", base);
+  if (
+    posted.status !== 303 ||
+    where.pathname !== "/login" ||
+    !(
+      where.searchParams.has("sent") ||
+      where.searchParams.get("error") === "send-failed"
+    )
+  ) {
+    throw new Error(
+      `no-JS login POST: expected 303 to /login?sent|error, got ${posted.status} ${where}`,
+    );
+  }
+  const outcome = visible(await (await fetch(where)).text());
+  if (
+    !/We sent a sign-in link to|We couldn(&#x27;|')t send your sign-in link/.test(
+      outcome,
+    )
+  ) {
+    throw new Error("no-JS login: the outcome is not in the visible page");
+  }
+  if (!outcome.includes("Send a new link to"))
+    throw new Error("no-JS login: no resend button");
+  const invalid = visible(
+    await (await fetch(`${base}/login?error=invalid-email`)).text(),
+  );
+  if (!invalid.includes("Enter a valid email address."))
+    throw new Error("no-JS login: invalid-email message missing");
+
   // Role gates: a mismatch must be a 404 STATUS, not a 200 carrying 404
   // content (which is what the layout guards alone produce under Cache
   // Components). The proxy is the gate. Each 404 is paired with a 200 on the
@@ -69,7 +118,7 @@ try {
   await expectStatus("/judge", late.cookie, 200);
 
   console.log(
-    "smoke: OK  /login renders; / public; anon /me -> /login; anon sign-out is a no-op; role gates are real 404s and read the role live",
+    "smoke: OK  /login renders; no-JS sign-in shows its outcome in the page; / public; anon /me -> /login; anon sign-out is a no-op; role gates are real 404s and read the role live",
   );
   exitCode = 0;
 } catch (err) {

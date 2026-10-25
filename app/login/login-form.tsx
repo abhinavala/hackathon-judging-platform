@@ -1,28 +1,13 @@
-"use client";
+import { requestSignInLink } from "./actions";
+import { SubmitButton } from "./submit-button";
 
-import { useActionState } from "react";
-import { requestSignInLink, type SignInState } from "./actions";
-
-// With `resendTo`, renders a single button that sends a fresh link to that
-// address (the expired / used link path). Otherwise, the email form.
+// A plain server-action form: no client state, so it works without
+// JavaScript. The outcome comes back as /login?sent=... or ?error=...
+//
+// With `resendTo`, a single button that sends a fresh link to that address.
 export function LoginForm({ resendTo }: { resendTo?: string }) {
-  const [state, action, pending] = useActionState<SignInState, FormData>(
-    requestSignInLink,
-    { status: "idle" },
-  );
-
-  if (state.status === "sent") {
-    return (
-      <p role="status">
-        We sent a sign-in link to <strong>{state.email}</strong>. Open it on any
-        device, this one or your phone. Each link works once, and requesting a
-        new one replaces the old one.
-      </p>
-    );
-  }
-
   return (
-    <form action={action} className="flex flex-col gap-3">
+    <form action={requestSignInLink} className="flex flex-col gap-3">
       {resendTo ? (
         <input type="hidden" name="email" value={resendTo} />
       ) : (
@@ -36,27 +21,13 @@ export function LoginForm({ resendTo }: { resendTo?: string }) {
             type="email"
             required
             autoComplete="email"
-            defaultValue={state.status === "error" ? state.email : undefined}
             className="rounded border px-3 py-2"
           />
         </>
       )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded border px-3 py-2 font-medium disabled:opacity-50"
-      >
-        {pending
-          ? "Sending…"
-          : resendTo
-            ? `Send a new link to ${resendTo}`
-            : "Send sign-in link"}
-      </button>
-      {state.status === "error" && (
-        <p role="alert" className="text-sm text-red-600">
-          {state.message}
-        </p>
-      )}
+      <SubmitButton>
+        {resendTo ? `Send a new link to ${resendTo}` : "Send sign-in link"}
+      </SubmitButton>
     </form>
   );
 }
