@@ -146,7 +146,16 @@ test("round-trips a Google Form export, field for field", () => {
     assert.deepEqual(read.errors, [], variant);
     assert.deepEqual(read.warnings, [], variant);
     assert.deepEqual(
-      read.teams.map(({ line: _line, submittedAt: _at, ...rest }) => rest),
+      read.teams.map((t) => ({
+        name: t.name,
+        tracks: t.tracks,
+        devpostUrl: t.devpostUrl,
+        githubUrls: t.githubUrls,
+        memberEmails: t.memberEmails,
+        hasGradStudent: t.hasGradStudent,
+        allFreshmen: t.allFreshmen,
+        halfOrMoreNonMale: t.halfOrMoreNonMale,
+      })),
       SOURCE.map(expected),
       variant,
     );
