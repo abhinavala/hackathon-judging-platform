@@ -12,6 +12,13 @@ export type SolveInput = {
   teamTracks: Set<Sponsor>[];
   judges: JudgeRoster;
   seed?: number;
+  /**
+   * Fixed panel composition (judge index pairs). When given, Stage 0 is
+   * skipped and this is the only plan scored, so an organizer can keep the
+   * stations' current judges. Not in the Python reference: it is solve() with
+   * a single candidate, through the same Stage 1-3 code.
+   */
+  panels?: Pair[];
 };
 
 export type SolveStats = {

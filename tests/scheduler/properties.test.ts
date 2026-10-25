@@ -75,3 +75,25 @@ test("no tracks: panel workloads differ by at most one", () => {
     assert.deepEqual(scheduleErrors(r, nTeams), []);
   }
 });
+
+// Fixed panels: solve() with the panels a normal run chose reproduces that
+// run (same Stage 1-3 code, one candidate instead of ~70).
+test("fixed panels: re-solving with the winning composition reproduces the schedule", () => {
+  const rng = new PyRandom(2026);
+  for (let i = 0; i < 40; i++) {
+    const input = scenario(rng, i);
+    const auto = solve(input);
+    const fixed = solve({ ...input, panels: auto.panels });
+    assert.equal(fixed.stats.winningStrategy, "fixed");
+    assert.deepEqual(fixed.assignments, auto.assignments, `scenario ${i}`);
+    assert.deepEqual([...fixed.slotOf], [...auto.slotOf], `scenario ${i}`);
+    assert.equal(fixed.nSlots, auto.nSlots);
+  }
+});
+
+test("fixed panels: a judge on two panels, or a missing judge, is refused", () => {
+  const judges = roster([["AWS", 2], ["none", 6]]);
+  const teamTracks = Array.from({ length: 20 }, () => new Set<Sponsor>());
+  assert.throws(() => solve({ teamTracks, judges, panels: [[0, 1], [1, 2]] }), /two panels/);
+  assert.throws(() => solve({ teamTracks, judges, panels: [[0, 9], [2, 3]] }), /no judge 9/);
+});

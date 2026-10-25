@@ -28,9 +28,9 @@ function coverage(teamTracks: Set<Sponsor>[], panelSponsors: Set<Sponsor>[], ass
   return { full, seats };
 }
 
-export function solve({ teamTracks, judges, seed = 0 }: SolveInput): SolveResult {
+export function solve({ teamTracks, judges, seed = 0, panels: fixedPanels }: SolveInput): SolveResult {
   const nTeams = teamTracks.length;
-  const nPanels = Math.floor(judges.length / 2);
+  const nPanels = fixedPanels ? fixedPanels.length : Math.floor(judges.length / 2);
   if (nTeams === 0) throw new Error("solve: no teams");
   if (nPanels < 2) throw new Error("solve: need at least 4 judges (2 panels)");
 
@@ -42,7 +42,20 @@ export function solve({ teamTracks, judges, seed = 0 }: SolveInput): SolveResult
     full: number;
     seats: number;
   } | null = null;
-  for (const [name, panels] of candidatePlans(judges, teamTracks, nPanels)) {
+  if (fixedPanels) {
+    const seen = new Set<number>();
+    for (const [a, b] of fixedPanels) {
+      for (const j of [a, b]) {
+        if (!Number.isInteger(j) || j < 0 || j >= judges.length) throw new Error(`solve: no judge ${j}`);
+        if (seen.has(j)) throw new Error(`solve: judge ${j} is on two panels`);
+        seen.add(j);
+      }
+    }
+  }
+  const plans: [string, Pair[]][] = fixedPanels
+    ? [["fixed", fixedPanels]]
+    : candidatePlans(judges, teamTracks, nPanels);
+  for (const [name, panels] of plans) {
     const panelSponsors = panels.map(([a, b]) => {
       const s = new Set<Sponsor>();
       for (const j of [judges[a], judges[b]]) if (j !== null) s.add(j);
