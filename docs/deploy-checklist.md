@@ -15,11 +15,12 @@ Both projects are ACM-owned (acm@scu.edu, org "SCU ACM"), us-west-1:
 
 They replace `gujdsezfxjwhpatzqqgj` entirely.
 
-- [ ] **Preview and Production must never share a database.** A preview
+- [x] **Preview and Production must never share a database.** A preview
       deploy writing to real event data is a bad failure mode generally and a
       disaster during event week. Vercel's Production variables point at
       `jgetndieacanzhrzmyiz`, its Preview variables at `tcauglluxdmqselpsqjl`,
-      and 0001-0003 are pushed to both. If that ever stops being true, the
+      and 0001-0003 are pushed to both (done and verified 2026-10-25: 14
+      tables each, anon read [] and anon insert 401). If that ever stops being true, the
       freeze in event-week-runbook.md applies from November 5.
 - [ ] **Never call anything that makes Supabase send email.** Supabase's
       built-in mailer is locked at **2 emails/hour** per project and cannot be
