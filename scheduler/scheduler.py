@@ -136,6 +136,17 @@ def improve_spacing(color_of, n_colors, n_panels, target=None, passes=60):
     slots) there are no empty slots at all, so MOVE can never fire and only
     SWAP can improve anything. Both moves preserve validity by construction:
     we only accept a slot that does not collide with the team's other slot.
+
+    ORDER-SENSITIVE. The output depends on the INSERTION ORDER of color_of,
+    not just its contents: slots_of is built by iterating color_of, teams are
+    visited via sorted(slots_of, key=gap), and sorted() is stable, so among
+    teams with equal gaps the insertion order decides who is repaired first,
+    which changes the result. Two colourings with identical (edge -> colour)
+    pairs but different dict order can produce different schedules. Anything
+    that rebuilds, copies or reorders color_of upstream (edge_color's path
+    flip deletes and re-inserts edges, for instance) changes the output. The
+    TypeScript port (lib/scheduler/spacing.ts) reproduces this order exactly
+    and its parity tests fail if either side changes it.
     """
     if target is None:
         target = n_colors // 3

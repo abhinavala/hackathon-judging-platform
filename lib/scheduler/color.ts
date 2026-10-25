@@ -27,7 +27,12 @@
 
 export type EdgeKey = number;
 
-/** Colour (slot) per edge, keyed team * nPanels + panel, in first-coloured order. */
+/**
+ * Colour (slot) per edge, keyed team * nPanels + panel. The Map's ORDER is
+ * part of the result: improveSpacing iterates it and breaks ties by it (see
+ * spacing.ts). Edges are in first-coloured order, with path-flipped edges
+ * moved to the end, exactly as the Python's dict.
+ */
 export function edgeColor(
   edges: [number, number][],
   nTeams: number,

@@ -10,6 +10,14 @@
 // fire and only SWAP can improve anything; adding it took the worst-case gap
 // from 1 slot to 5. Both moves preserve validity by construction: a slot is
 // only accepted if it does not collide with the team's other slot.
+//
+// ORDER-SENSITIVE: the output depends on the insertion order of colorOf, not
+// just its contents. slotsOf is built by iterating colorOf, teams are visited
+// in sortedBy(gap) order, and that sort is stable, so among equal gaps the
+// insertion order decides who is repaired first and changes the result. Do
+// not rebuild, sort or copy colorOf in a different order (here or upstream in
+// edgeColor) without regenerating the goldens from the Python and expecting
+// different schedules: tests/scheduler/python-parity.test.ts compares order.
 
 import type { EdgeKey } from "./color.ts";
 import { sortedBy } from "./python.ts";
