@@ -36,11 +36,14 @@ export default async function GeneratePage({
   const nextVersion = Math.max(0, ...schedules.map((s) => s.version)) + 1;
   const staffed = stations.filter((s) => s.judgeIds.length === 2).length;
 
-  // Default start: the published schedule's first slot if there is one,
-  // otherwise 10:00 the day after check-in closes.
+  // Default start: the event's judging start (what team pages announce);
+  // failing that the published schedule's first slot, then 10:00 the day
+  // after check-in closes.
   const published = schedules.find((s) => s.status === "published");
-  let defaultStart = "";
-  if (published) {
+  let defaultStart = event.judging_starts_at
+    ? utcToZonedLocal(event.judging_starts_at, event.timezone)
+    : "";
+  if (!defaultStart && published) {
     const { data } = await db
       .from("slots")
       .select("starts_at")

@@ -19,7 +19,13 @@ const at = (hhmm: string) => Date.parse(`2026-11-08T${hhmm}:00-08:00`);
 const RPC = {
   found: true,
   team: { name: "ShelterLink", tracks: [] },
-  event: { name: "AWS x A10 Hack", slug: "aws-a10-2026", timezone: LA },
+  event: {
+    name: "AWS x A10 Hack",
+    slug: "aws-a10-2026",
+    timezone: LA,
+    judging_starts_at: "2026-11-08T18:00:00+00:00",
+    help_location: "the check-in table by the main entrance",
+  },
   published: { version: 3, published_at: "2026-11-08T17:40:00+00:00" },
   slots: [
     {
@@ -37,7 +43,6 @@ const RPC = {
       location: null,
     },
   ],
-  expected_start: "2026-11-08T18:00:00+00:00",
   announcements: [
     {
       body: "Judging starts at 10:00.",
@@ -53,6 +58,18 @@ test("fromRpc maps the RPC's JSON", () => {
   assert.equal(view.published?.version, 3);
   assert.equal(view.slots[0].location, "Blue section, back wall");
   assert.equal(view.announcements[0].body, "Judging starts at 10:00.");
+  assert.equal(view.event.judgingStartsAt, "2026-11-08T18:00:00+00:00");
+  assert.equal(
+    view.event.helpLocation,
+    "the check-in table by the main entrance",
+  );
+  // An older RPC without the 0006 fields still maps (to "not set").
+  const old = fromRpc({
+    ...RPC,
+    event: { name: "X", slug: "x", timezone: LA },
+  }) as Extract<TeamView, { found: true }>;
+  assert.equal(old.event.judgingStartsAt, null);
+  assert.equal(old.event.helpLocation, null);
   assert.deepEqual(fromRpc({ found: false }), { found: false });
   assert.deepEqual(fromRpc(null), { found: false });
 });
@@ -100,7 +117,7 @@ test("the not-normal states are distinct, never blank", () => {
     heroFor({ ...view, published: null, slots: [] }, at("09:00")),
     {
       kind: "unpublished",
-      expectedStart: "2026-11-08T18:00:00+00:00",
+      judgingStartsAt: "2026-11-08T18:00:00+00:00",
     },
   );
   assert.deepEqual(heroFor({ ...view, slots: [] }, at("10:00")), {

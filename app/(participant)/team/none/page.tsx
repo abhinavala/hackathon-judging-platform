@@ -1,11 +1,24 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { requireSession } from "@/lib/session";
+import { createClient } from "@/lib/supabase/server";
+import { helpPlace } from "@/lib/event/copy";
 
 export const instant = false;
 
 // Where /team sends a signed-in person who isn't on a team. Never blank.
 export default async function NotOnATeamPage() {
   const ctx = await requireSession();
+  await connection();
+  const db = await createClient();
+  // The current event, as the organizer screens pick it.
+  const { data: event } = await db
+    .from("events")
+    .select("help_location")
+    .order("year", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   return (
     <main className="mx-auto w-full max-w-lg p-5">
       <h1 className="mb-2 text-2xl font-semibold">
@@ -17,7 +30,7 @@ export default async function NotOnATeamPage() {
       </p>
       <p className="mb-3">
         If your team checked in with a different email for you, ask your captain
-        to fix it, or find an organizer at the help desk.
+        to fix it, or find an organizer at {helpPlace(event?.help_location)}.
       </p>
       <p>
         Have your team&apos;s join code?{" "}

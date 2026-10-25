@@ -83,14 +83,14 @@ isOneToOne: false
                   ]
                 },"events": {
                   Row: {
-                    "checkin_closes_at": string | null,"checkin_opens_at": string | null,"created_at": string,"id": string,"name": string,"slot_minutes": number,"slug": string,"timezone": string,"year": number
+                    "checkin_closes_at": string | null,"checkin_opens_at": string | null,"created_at": string,"help_location": string | null,"id": string,"judging_starts_at": string | null,"name": string,"slot_minutes": number,"slug": string,"timezone": string,"year": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "checkin_closes_at"?: string | null,"checkin_opens_at"?: string | null,"created_at"?: string,"id"?: string,"name": string,"slot_minutes"?: number,"slug": string,"timezone"?: string,"year": number
+                    "checkin_closes_at"?: string | null,"checkin_opens_at"?: string | null,"created_at"?: string,"help_location"?: string | null,"id"?: string,"judging_starts_at"?: string | null,"name": string,"slot_minutes"?: number,"slug": string,"timezone"?: string,"year": number
                   }
                   Update: {
-                    "checkin_closes_at"?: string | null,"checkin_opens_at"?: string | null,"created_at"?: string,"id"?: string,"name"?: string,"slot_minutes"?: number,"slug"?: string,"timezone"?: string,"year"?: number
+                    "checkin_closes_at"?: string | null,"checkin_opens_at"?: string | null,"created_at"?: string,"help_location"?: string | null,"id"?: string,"judging_starts_at"?: string | null,"name"?: string,"slot_minutes"?: number,"slug"?: string,"timezone"?: string,"year"?: number
                   }
                   Relationships: [
                     

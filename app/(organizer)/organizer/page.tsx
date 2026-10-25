@@ -8,6 +8,7 @@ import {
   loadTeams,
 } from "@/lib/admin/data";
 import { preflight } from "@/lib/scheduler";
+import { clockWithZone, dayLabel } from "@/lib/team/view";
 import { Section, table } from "./_ui/ui";
 
 // Reads the organizer's session; blocks on the server rather than
@@ -39,6 +40,28 @@ export default async function OrganizerPage() {
       <Section title="At a glance">
         <table className={`${table} w-auto`}>
           <tbody>
+            <tr>
+              <th>Judging start</th>
+              <td>
+                <Link href="/organizer/event" className="underline">
+                  {event.judging_starts_at
+                    ? `${dayLabel(event.judging_starts_at, event.timezone)}, ${clockWithZone(event.judging_starts_at, event.timezone)}`
+                    : "not set"}
+                </Link>
+                {!event.judging_starts_at &&
+                  " — team pages can't say when to check back"}
+              </td>
+            </tr>
+            <tr>
+              <th>Help location</th>
+              <td>
+                <Link href="/organizer/event" className="underline">
+                  {event.help_location ?? "not set"}
+                </Link>
+                {!event.help_location &&
+                  " — participants are told \u201cthe help desk\u201d"}
+              </td>
+            </tr>
             <tr>
               <th>Teams checked in</th>
               <td>

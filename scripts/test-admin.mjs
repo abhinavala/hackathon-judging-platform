@@ -191,6 +191,7 @@ async function run() {
   // 1. Access.
   for (const p of [
     "/organizer",
+    "/organizer/event",
     "/organizer/judges",
     "/organizer/panels",
     "/organizer/generate",
@@ -923,8 +924,10 @@ async function run() {
   tvText = visible((await get(`/t/${code}`)).html);
   check(
     tvText.includes("Your team isn't in the judging schedule.") &&
-      tvText.includes("help desk"),
-    "team view: a team not in the published schedule is told so, and who to see",
+      tvText.includes(
+        "find an organizer at the check-in table by the main entrance now",
+      ),
+    "team view: a team not in the published schedule is told so, and where to go (event setting)",
   );
   await db
     .from("assignments")
@@ -937,12 +940,84 @@ async function run() {
   check(
     tvText.includes("The judging schedule isn't published yet.") &&
       tvText.includes(
-        "Check back closer to 10:00 AM PST on Sunday, November 8.",
+        "Judging starts at 10:00 AM PST on Sunday, November 8. Check back closer to then.",
       ),
-    "team view: before publishing it says when to check back (from the latest draft)",
-    tvText.slice(0, 160),
+    "team view: before publishing it says when judging starts (event setting)",
+    tvText.slice(0, 200),
+  );
+
+  // The Event screen moves the announced start; the team page follows it,
+  // not the schedules' first slots.
+  r = await submit("/organizer/event", org.cookie, "judgingStartsAt", {
+    judgingStartsAt: "2026-11-08T10:30",
+    helpLocation: "  Room 101,   next to the elevators ",
+  });
+  check(
+    flash(r.url).startsWith("Saved."),
+    "event screen: saves the judging start and help location",
+    flash(r.url),
+  );
+  const { data: evRow } = await db
+    .from("events")
+    .select("judging_starts_at, help_location")
+    .single();
+  check(
+    Date.parse(evRow.judging_starts_at) ===
+      Date.parse("2026-11-08T18:30:00Z") &&
+      evRow.help_location === "Room 101, next to the elevators",
+    "event screen: the start is read in the event's zone; spaces are tidied",
+    JSON.stringify(evRow),
+  );
+  tvText = visible((await get(`/t/${code}`)).html);
+  check(
+    tvText.includes("Judging starts at 10:30 AM PST"),
+    "team view: the announced start follows the event setting",
+    tvText.slice(0, 200),
   );
   await db.from("schedules").update({ status: "published" }).eq("id", v3.id);
+  check(
+    (await get("/organizer/generate", org.cookie)).html.includes(
+      'value="2026-11-08T10:30"',
+    ),
+    "generate: the start defaults to the event's judging start",
+  );
+  const { data: aDraft } = await db
+    .from("schedules")
+    .select("id")
+    .eq("status", "draft")
+    .order("version")
+    .limit(1)
+    .single();
+  const draftPreview = await get(
+    `/organizer/schedules/${aDraft.id}`,
+    org.cookie,
+  );
+  check(
+    text(draftPreview.html).includes(
+      "Starts at 10:00 AM, not the event's judging start (10:30 AM)",
+    ),
+    "preview: a schedule starting at another time than the judging start is a warning",
+  );
+  r = await submit("/organizer/event", org.cookie, "judgingStartsAt", {
+    judgingStartsAt: "",
+    helpLocation: "",
+  });
+  check(
+    !text(
+      (await get(`/organizer/schedules/${aDraft.id}`, org.cookie)).html,
+    ).includes("not the event's judging start") &&
+      text((await get("/organizer", org.cookie)).html).includes(
+        "Judging start not set",
+      ),
+    "event screen: blank clears the settings; the overview says they're unset",
+  );
+  await db
+    .from("events")
+    .update({
+      judging_starts_at: "2026-11-08T10:00:00-08:00",
+      help_location: "the check-in table by the main entrance",
+    })
+    .eq("id", ev.id);
 
   const mine = await get("/team", participant.cookie);
   check(

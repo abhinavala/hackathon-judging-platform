@@ -20,6 +20,7 @@ import {
   type TeamSlot,
   type TeamView,
 } from "@/lib/team/view";
+import { HELP_FALLBACK, helpPlace } from "@/lib/event/copy";
 
 const REFRESH_MS = 25_000;
 /** Older than this and the page says, prominently, how old its data is. */
@@ -132,7 +133,7 @@ export function TeamViewClient({
           {failing
             ? "We can't reach the server, and there's no saved copy on this phone yet. "
             : ""}
-          Try again in a moment, or find an organizer at the help desk.
+          Try again in a moment, or find an organizer at {HELP_FALLBACK}.
         </p>
         <RetryButton onClick={refresh} />
       </Shell>
@@ -143,6 +144,7 @@ export function TeamViewClient({
   const stale = serverNow - fetchedAt > STALE_MS;
   const hero = heroFor(view, serverNow);
   const tz = view.found ? view.event.timezone : "America/Los_Angeles";
+  const help = helpPlace(view.found ? view.event.helpLocation : null);
 
   return (
     <Shell>
@@ -182,8 +184,8 @@ export function TeamViewClient({
               We don&apos;t recognise the code {code}.
             </p>
             <p className="mt-3 text-lg">
-              Check it against your confirmation email, or ask an organizer at
-              the help desk.
+              Check it against your confirmation email, or ask an organizer at{" "}
+              {help}.
             </p>
             <Link
               href="/t"
@@ -200,8 +202,8 @@ export function TeamViewClient({
               The judging schedule isn&apos;t published yet.
             </p>
             <p className="mt-3 text-xl">
-              {hero.expectedStart
-                ? `Check back closer to ${clockWithZone(hero.expectedStart, tz)} on ${dayLabel(hero.expectedStart, tz)}.`
+              {hero.judgingStartsAt
+                ? `Judging starts at ${clockWithZone(hero.judgingStartsAt, tz)} on ${dayLabel(hero.judgingStartsAt, tz)}. Check back closer to then.`
                 : "Check back closer to judging."}{" "}
               This page updates by itself.
             </p>
@@ -214,8 +216,8 @@ export function TeamViewClient({
               Your team isn&apos;t in the judging schedule.
             </p>
             <p className="mt-3 text-xl">
-              If you submitted your project, find an organizer at the help desk
-              now. They can add you.
+              If you submitted your project, find an organizer at {help} now.
+              They can add you.
             </p>
             <p className="mt-2 text-base">
               (Published schedule v{hero.version}.)

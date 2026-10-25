@@ -6,6 +6,8 @@
 // Warnings advise; the organizer decides. Each has a stable id so the
 // publish form can require an explicit acknowledgement of each one.
 
+import { clock } from "./time.ts";
+
 export type ReviewTeam = { id: string; name: string; sponsors: string[] };
 export type ReviewStation = { id: string; label: string; sponsors: string[] };
 export type ReviewSlot = { id: string; index: number; startsAt: string };
@@ -30,6 +32,8 @@ export type ReviewInput = {
     stations: { id: string; label: string }[];
     assignments: ReviewAssignment[];
   } | null;
+  /** The event's judging start (what unpublished team pages announce). */
+  judgingStart?: { startsAt: string; timezone: string } | null;
 };
 
 export type WarningId =
@@ -39,7 +43,8 @@ export type WarningId =
   | "uneven-load"
   | "unfilled-slots"
   | "excluded-teams"
-  | "changes-vs-published";
+  | "changes-vs-published"
+  | "start-differs";
 
 export type ReviewWarning = { id: WarningId; title: string; detail: string[] };
 
@@ -270,6 +275,19 @@ export function reviewSchedule(input: ReviewInput): Review {
         ...diff.moved.map((m) => `${m.name}: ${fmt(m.from)} -> ${fmt(m.to)}`),
         ...diff.added.map((n) => `${n}: new`),
         ...diff.removed.map((n) => `${n}: no longer scheduled`),
+      ],
+    });
+  }
+
+  const first = [...slots].sort((a, b) => a.index - b.index)[0];
+  const js = input.judgingStart;
+  if (first && js && Date.parse(first.startsAt) !== Date.parse(js.startsAt)) {
+    warnings.push({
+      id: "start-differs",
+      title: `Starts at ${clock(first.startsAt, js.timezone)}, not the event's judging start (${clock(js.startsAt, js.timezone)})`,
+      detail: [
+        `Team pages tell everyone judging starts at ${clock(js.startsAt, js.timezone)}.`,
+        "Publish anyway and update the judging start on the Event screen, or regenerate at that time.",
       ],
     });
   }

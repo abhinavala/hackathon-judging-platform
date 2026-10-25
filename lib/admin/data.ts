@@ -326,6 +326,9 @@ export async function loadScheduleView(
       })),
       slots: contents.slots,
       assignments: contents.assignments,
+      judgingStart: event.judging_starts_at
+        ? { startsAt: event.judging_starts_at, timezone: event.timezone }
+        : null,
       excludedTeams: teams
         .filter((t) => t.checkedIn && !scheduled.has(t.id))
         .map((t) => ({ id: t.id, name: t.name })),

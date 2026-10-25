@@ -177,6 +177,34 @@ test("diff against the published version names moved, added and removed teams", 
   assert.match(w.title, /v1: 2 moved, 1 added, 0 removed/);
 });
 
+test("a schedule that doesn't start at the event's judging start is flagged", () => {
+  const onTime = reviewSchedule({
+    ...eventInput(),
+    judgingStart: { startsAt: "2026-11-08T18:00:00Z", timezone: LA },
+  });
+  assert.equal(
+    onTime.warnings.some((w) => w.id === "start-differs"),
+    false,
+  );
+  const late = reviewSchedule({
+    ...eventInput(),
+    judgingStart: { startsAt: "2026-11-08T17:30:00Z", timezone: LA },
+  });
+  const w = late.warnings.find((x) => x.id === "start-differs");
+  assert.ok(w);
+  assert.equal(
+    w.title,
+    "Starts at 10:00 AM, not the event's judging start (9:30 AM)",
+  );
+  // No judging start set: nothing to compare against.
+  assert.equal(
+    reviewSchedule({ ...eventInput(), judgingStart: null }).warnings.some(
+      (x) => x.id === "start-differs",
+    ),
+    false,
+  );
+});
+
 test("structural errors are reported as invalid, not warnings", () => {
   const input = eventInput();
   input.assignments = input.assignments.filter(

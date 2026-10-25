@@ -20,10 +20,16 @@ export type TeamView =
   | {
       found: true;
       team: { name: string; tracks: string[] };
-      event: { name: string; slug: string; timezone: string };
+      event: {
+        name: string;
+        slug: string;
+        timezone: string;
+        /** The authoritative judging start (event setting), not a draft's. */
+        judgingStartsAt: string | null;
+        helpLocation: string | null;
+      };
       published: { version: number; publishedAt: string | null } | null;
       slots: TeamSlot[];
-      expectedStart: string | null;
       announcements: Announcement[];
     };
 
@@ -32,7 +38,13 @@ export function fromRpc(raw: unknown): TeamView {
   const r = (raw ?? {}) as Record<string, unknown>;
   if (r.found !== true) return { found: false };
   const team = r.team as { name: string; tracks: string[] | null };
-  const event = r.event as { name: string; slug: string; timezone: string };
+  const event = r.event as {
+    name: string;
+    slug: string;
+    timezone: string;
+    judging_starts_at?: string | null;
+    help_location?: string | null;
+  };
   const pub = r.published as {
     version: number;
     published_at: string | null;
@@ -43,7 +55,13 @@ export function fromRpc(raw: unknown): TeamView {
   return {
     found: true,
     team: { name: team.name, tracks: team.tracks ?? [] },
-    event,
+    event: {
+      name: event.name,
+      slug: event.slug,
+      timezone: event.timezone,
+      judgingStartsAt: event.judging_starts_at ?? null,
+      helpLocation: event.help_location ?? null,
+    },
     published: pub
       ? { version: pub.version, publishedAt: pub.published_at }
       : null,
@@ -54,7 +72,6 @@ export function fromRpc(raw: unknown): TeamView {
       station: s.station as string,
       location: (s.location as string | null) ?? null,
     })),
-    expectedStart: (r.expected_start as string | null) ?? null,
     announcements: announcements.map((a) => ({
       body: a.body as string,
       level: a.level as Announcement["level"],
@@ -66,7 +83,7 @@ export function fromRpc(raw: unknown): TeamView {
 /** What the big text says right now. */
 export type Hero =
   | { kind: "not-found" }
-  | { kind: "unpublished"; expectedStart: string | null }
+  | { kind: "unpublished"; judgingStartsAt: string | null }
   | { kind: "not-scheduled"; version: number }
   | {
       kind: "upcoming";
@@ -88,7 +105,7 @@ export const HEAD_THERE_MINUTES = 5;
 export function heroFor(view: TeamView, now: number): Hero {
   if (!view.found) return { kind: "not-found" };
   if (!view.published)
-    return { kind: "unpublished", expectedStart: view.expectedStart };
+    return { kind: "unpublished", judgingStartsAt: view.event.judgingStartsAt };
   if (view.slots.length === 0)
     return { kind: "not-scheduled", version: view.published.version };
   const slots = [...view.slots].sort(

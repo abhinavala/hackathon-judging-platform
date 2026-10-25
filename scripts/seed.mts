@@ -43,6 +43,8 @@ const SLOT_MINUTES = 7;
 const CHECKIN_OPENS_AT = "2026-11-07T09:00:00-08:00";
 const CHECKIN_CLOSES_AT = "2026-11-07T11:00:00-08:00";
 const JUDGING_STARTS_AT = "2026-11-08T10:00:00-08:00";
+// A placeholder too: the real place is set on /organizer/event.
+const HELP_LOCATION = "the check-in table by the main entrance";
 
 const AWS = "AWS";
 const A10 = "A10";
@@ -628,6 +630,8 @@ async function main() {
       slot_minutes: SLOT_MINUTES,
       checkin_opens_at: CHECKIN_OPENS_AT,
       checkin_closes_at: CHECKIN_CLOSES_AT,
+      judging_starts_at: JUDGING_STARTS_AT,
+      help_location: HELP_LOCATION,
     },
   ]);
 
