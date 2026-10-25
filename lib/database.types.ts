@@ -361,6 +361,9 @@ isOneToOne: false
               "location_text": string,"panel_label": string,"slot_index": number,"starts_at": string,"team_name": string
             }[]
                            },
+"publish_schedule":
+{ Args: { "p_schedule_id": string }; Returns: undefined
+                           },
 "team_schedule_by_code":
 { Args: { "p_code": string }; Returns: {
               "ends_at": string,"location_text": string,"panel_label": string,"slot_index": number,"starts_at": string,"team_name": string,"track_names": (string)[]
