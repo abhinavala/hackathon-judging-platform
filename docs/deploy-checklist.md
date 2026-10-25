@@ -127,6 +127,20 @@ test:rls` at hosted Supabase.** The seed writes 60 fake teams (it refuses
 reset`. All three read `.env.local`, so keep hosted credentials out of
       it.
 
+## Rendering: status codes under cacheComponents
+
+- [ ] **Under `cacheComponents`, any page-level `redirect()` or `notFound()`
+      must happen BEFORE render, or it arrives as a 200.** Once a page or
+      layout starts streaming, the status is already committed: a redirect
+      becomes a 200 with a client-side jump, a `notFound()` a "soft" 404
+      (not-found content, status 200). Do redirects and gates in `proxy.ts`
+      or in a route handler (`route.ts`), as `/organizer` and `/judge` role
+      gates, `/team` and `/t/go` do. `scripts/smoke.mjs` and
+      `scripts/test-admin.mjs` assert the real 307/404 codes; add a check
+      when you add one. We hit this twice (role-gate 404s, then redirects)
+      and chose to keep the rendering mode rather than change it near the
+      event.
+
 ## Verify on the deployed URL
 
 - [ ] `/login` renders on production and on a preview.
