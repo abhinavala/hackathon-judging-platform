@@ -24,6 +24,7 @@ const NAV = [
   ["/organizer/panels", "Stations"],
   ["/organizer/generate", "Generate"],
   ["/organizer/schedules", "Schedules"],
+  ["/organizer/announcements", "Announcements"],
 ] as const;
 
 export default async function OrganizerLayout({

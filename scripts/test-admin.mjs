@@ -17,6 +17,7 @@ import {
   blockedReason,
   prepareImport,
 } from "../lib/admin/import.ts";
+import { parseCsv } from "../lib/csv/csv.ts";
 
 const PORT = 3200;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -510,6 +511,45 @@ async function run() {
     cells.length >= 120,
     "CSV: all 120 presentations present",
     String(cells.length),
+  );
+
+  // The printed schedule renders the same grid as the CSV, cell for cell.
+  const print = await get(`${draftPath}/print`, org.cookie);
+  const table = print.html.slice(
+    print.html.indexOf("<table"),
+    print.html.indexOf("</table>"),
+  );
+  const printed = table
+    .split("<tr")
+    .slice(1)
+    .map((tr) =>
+      [...tr.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/g)].map(([, c]) =>
+        decode(c.replace(/<!-- -->/g, "").replace(/<[^>]+>/g, "")),
+      ),
+    );
+  check(
+    print.status === 200 &&
+      JSON.stringify(printed) === JSON.stringify(parseCsv(csv.html)),
+    "print view: the same station x time grid as the CSV, cell for cell",
+    `${printed.length} rows; first ${JSON.stringify(printed[0]?.slice(0, 4))}`,
+  );
+  check(
+    text(print.html).includes("version 3, published") &&
+      !text(print.html).includes("DRAFT"),
+    "print view: the published version says so in its heading",
+  );
+  const { data: seededDraft } = await db
+    .from("schedules")
+    .select("id")
+    .eq("status", "draft")
+    .limit(1)
+    .single();
+  check(
+    text(
+      (await get(`/organizer/schedules/${seededDraft.id}/print`, org.cookie))
+        .html,
+    ).includes("DRAFT: not published"),
+    "print view: a draft is marked as not published",
   );
 
   // 8. Keep current judges, leave one team out: a new draft, not published.
@@ -1025,6 +1065,89 @@ async function run() {
     "/team sends a signed-in participant to their team's view",
     `${mine.status} ${mine.location}`,
   );
+
+  // 11. The board, and the announcements that drive its banner.
+  let board = visible((await get("/board/aws-a10-2026")).html);
+  check(
+    board.includes("First up") &&
+      board.includes("10:00–10:07 AM PST") &&
+      board.includes("After that") &&
+      board.includes("the check-in table by the main entrance"),
+    "board: before judging it leads with the first slot, then the one after, and where to get help",
+    board.slice(0, 240),
+  );
+  check(
+    !board.includes("11:38"),
+    "board: it shows two slots, not the whole grid",
+  );
+  check(
+    visible((await get("/board/nope")).html).includes(
+      "No event called “nope”.",
+    ),
+    "board: an unknown event says so",
+  );
+  const boardData = await (
+    await fetch(`${BASE}/board/aws-a10-2026/data`)
+  ).json();
+  check(
+    boardData.view.found === true &&
+      boardData.view.slots.length === 15 &&
+      typeof boardData.serverNow === "number" &&
+      !JSON.stringify(boardData).includes("@"),
+    "board: the polling endpoint returns the schedule and server time, and no email addresses",
+  );
+
+  const msg = "Station 4 has moved to the Blue section, back wall.";
+  r = await submit(
+    "/organizer/announcements",
+    org.cookie,
+    "Post announcement",
+    {
+      body: `  ${msg}  `,
+      level: "warning",
+    },
+  );
+  check(
+    flash(r.url).startsWith("Posted."),
+    "announcements: post one",
+    flash(r.url),
+  );
+  board = visible((await get("/board/aws-a10-2026")).html);
+  check(board.includes(msg), "announcements: it shows on the board");
+  check(
+    visible((await get(`/t/${code}`)).html).includes(msg),
+    "announcements: and on team pages",
+  );
+  r = await submit("/organizer/announcements", org.cookie, `Clear: ${msg}`);
+  check(
+    flash(r.url) === "Cleared." &&
+      !visible((await get("/board/aws-a10-2026")).html).includes(msg),
+    "announcements: clearing takes it off the board",
+    flash(r.url),
+  );
+  r = await submit(
+    "/organizer/announcements",
+    org.cookie,
+    "Post announcement",
+    {
+      body: "x".repeat(201),
+    },
+  );
+  check(
+    flash(r.url).startsWith("Keep it under 200 characters"),
+    "announcements: an over-long one is refused",
+    flash(r.url),
+  );
+
+  await db.from("schedules").update({ status: "archived" }).eq("id", v3.id);
+  board = visible((await get("/board/aws-a10-2026")).html);
+  check(
+    board.includes("The judging schedule isn't published yet.") &&
+      board.includes("Judging starts at 10:00 AM PST on Sunday, November 8."),
+    "board: before publishing it says when judging starts",
+    board.slice(0, 240),
+  );
+  await db.from("schedules").update({ status: "published" }).eq("id", v3.id);
 
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 }
