@@ -17,6 +17,7 @@ export const instant = false;
 
 const NAV = [
   ["/organizer", "Overview"],
+  ["/organizer/import", "Import teams"],
   ["/organizer/judges", "Judges"],
   ["/organizer/panels", "Stations"],
   ["/organizer/generate", "Generate"],

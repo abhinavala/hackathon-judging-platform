@@ -9,8 +9,14 @@
 //
 //   npm run test:admin
 import { spawn, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { admin, signIn } from "./lib/session.mjs";
+import {
+  applyImport,
+  blockedReason,
+  prepareImport,
+} from "../lib/admin/import.ts";
 
 const PORT = 3200;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -546,6 +552,152 @@ async function run() {
     statuses.find((s) => s.version === 3).status === "published" &&
       statuses.find((s) => s.version === 4).status === "draft",
     "v3 stays published; v4 is only a draft",
+  );
+
+  // 9. Teams CSV import, with the synthetic sample of the real export.
+  const TRACKS = [
+    "Best Use of WebSpatial",
+    "Future Unicorn Award",
+    "Best Project Built w/ ElevenLabs",
+    "Best Use of AMD Tech",
+    "Best Use of Responsible AI",
+    "Best in Play (Top Game)",
+  ];
+  const { data: ev } = await db.from("events").select("id").single();
+  await db
+    .from("tracks")
+    .insert(
+      TRACKS.map((name, i) => ({ event_id: ev.id, name, sort_order: 10 + i })),
+    );
+  const sample = readFileSync(
+    new URL("../fixtures/google-form-responses.sample.csv", import.meta.url),
+    "utf8",
+  );
+  const { count: teamsBefore } = await db
+    .from("teams")
+    .select("id", { count: "exact", head: true });
+
+  // The screen's server action is a thin wrapper over prepareImport /
+  // applyImport (lib/admin/import.ts); drive those directly with the
+  // ORGANIZER's own session, so RLS applies exactly as in the app. (A
+  // no-JavaScript POST can't drive the client-side import form: in a
+  // production build the action's result only reaches the page via React.)
+  const page = (await get("/organizer/import", org.cookie)).html;
+  check(
+    text(page).includes("Best in Play (Top Game)"),
+    "import page renders with the event's tracks",
+  );
+  const event = { id: ev.id, timezone: "America/Los_Angeles" };
+  let prepared = await prepareImport(org.client, event, sample);
+  const { read, plan } = prepared;
+  check(
+    read.columns.shape === "old" && read.columns.ignored.length === 0,
+    "import: old form, all 12 questions read",
+  );
+  check(
+    plan.needsName.length === 8 && plan.create.length === 0,
+    "import: 8 teams need a name (none invented)",
+  );
+  check(
+    read.warnings.some((w) =>
+      /Katherine Johnson submitted more than once: using line 16 \(2026-02-28 11:52:31\), replacing line 7/.test(
+        w.message,
+      ),
+    ),
+    "import: the duplicate resolves to the later timestamp",
+  );
+  check(
+    read.warnings.some(
+      (w) =>
+        w.message ===
+        "Barbara Liskov: says 5 people but lists 4 (including the submitter).",
+    ),
+    "import: team-size mismatch reported",
+  );
+  let refused = "";
+  try {
+    await applyImport(org.client, event, prepared);
+  } catch (e) {
+    refused = e.message;
+  }
+  check(
+    refused === "Give every team a name first (8 still need one).",
+    "import: applying without names is refused",
+    refused,
+  );
+  const { count: afterRefusal } = await db
+    .from("teams")
+    .select("id", { count: "exact", head: true });
+  check(afterRefusal === teamsBefore, "and nothing was written");
+
+  const names = Object.fromEntries(
+    plan.needsName.map((t) => [t.line, `Imported Team L${t.line}`]),
+  );
+  prepared = await prepareImport(org.client, event, sample, names);
+  check(
+    prepared.plan.create.length === 8 && blockedReason(prepared) === null,
+    "import: with names, the plan is 8 creations",
+  );
+  const result = await applyImport(org.client, event, prepared);
+  check(
+    result.created.length === 8 && result.failed.length === 0,
+    "import: 8 teams created as the organizer",
+    JSON.stringify(result.failed),
+  );
+
+  const { data: kj } = await db
+    .from("teams")
+    .select("id, github_urls, checked_in_at, contact_phone")
+    .eq("name", "Imported Team L16")
+    .single();
+  check(
+    kj.github_urls.join() === "https://github.com/example/beta-corrected",
+    "import: Katherine's team has the corrected GitHub link",
+  );
+  check(
+    new Date(kj.checked_in_at).toISOString() === "2026-02-28T19:52:31.000Z",
+    "import: checked in at the form time (11:52:31 PST)",
+    kj.checked_in_at,
+  );
+  const { count: kjTracks } = await db
+    .from("team_tracks")
+    .select("track_id", { count: "exact", head: true })
+    .eq("team_id", kj.id);
+  check(kjTracks === 3, "import: with its three tracks");
+  const { data: captain } = await db
+    .from("team_members")
+    .select("email, full_name, is_captain")
+    .eq("team_id", kj.id)
+    .single();
+  check(
+    captain.email === "bbb@example.edu" &&
+      captain.is_captain &&
+      captain.full_name === "Katherine Johnson",
+    "import: the submitter is the captain",
+  );
+  const { data: bl } = await db
+    .from("teams")
+    .select("notes")
+    .eq("name", "Imported Team L9")
+    .single();
+  check(
+    bl.notes?.includes("Radia Perlman, Frances Allen, Shafi Goldwasser"),
+    "import: old-form teammate names kept in notes",
+  );
+  const gen = text((await get("/organizer/generate", org.cookie)).html);
+  check(
+    gen.includes("Imported Team L16"),
+    "imported teams appear on the generate screen, checked in",
+  );
+
+  prepared = await prepareImport(org.client, event, sample);
+  check(
+    prepared.plan.unchanged.length === 8 &&
+      prepared.plan.create.length +
+        prepared.plan.update.length +
+        prepared.plan.needsName.length ===
+        0,
+    "re-importing the same file matches every team by submitter email and changes nothing",
   );
 
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
