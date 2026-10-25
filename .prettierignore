@@ -1,0 +1,8 @@
+.next
+node_modules
+supabase/.temp
+lib/database.types.ts
+package-lock.json
+*.sql
+*.md
+scheduler
