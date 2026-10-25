@@ -6,19 +6,44 @@ live in [event-week-runbook.md](event-week-runbook.md).
 
 ## Supabase (hosted)
 
+Both projects are ACM-owned (acm@scu.edu, org "SCU ACM"), us-west-1:
+
+| Environment | Project ref | URL |
+|---|---|---|
+| Production | `jgetndieacanzhrzmyiz` | https://jgetndieacanzhrzmyiz.supabase.co |
+| Preview | `tcauglluxdmqselpsqjl` | https://tcauglluxdmqselpsqjl.supabase.co |
+
+They replace `gujdsezfxjwhpatzqqgj` entirely.
+
 - [ ] **Preview and Production must never share a database.** A preview
       deploy writing to real event data is a bad failure mode generally and a
-      disaster during event week. Production uses `gujdsezfxjwhpatzqqgj`;
-      Preview needs its own project, with the Preview env vars pointed at it
-      and 0001-0003 pushed to it too. **Not yet true:** both currently use
-      the production project, because the free plan's two active projects
-      are taken (the other is the unrelated `sgdsbrakxxoatbrviqho`).
+      disaster during event week. Vercel's Production variables point at
+      `jgetndieacanzhrzmyiz`, its Preview variables at `tcauglluxdmqselpsqjl`,
+      and 0001-0003 are pushed to both. If that ever stops being true, the
+      freeze in event-week-runbook.md applies from November 5.
+- [ ] **Never call anything that makes Supabase send email.** Supabase's
+      built-in mailer is locked at **2 emails/hour** per project and cannot be
+      raised without custom SMTP; with 250 people checking in at once, any
+      call that uses it silently fails for almost everyone. Our flow never
+      uses it: links are minted with `auth.admin.generateLink()` (sends
+      nothing) and delivered by our own sender. These calls WOULD use the
+      mailer and must not appear in app code:
+      `signUp()`, `signInWithOtp()`, `resetPasswordForEmail()`,
+      `auth.admin.inviteUserByEmail()`, `updateUser({ email })`,
+      `reauthenticate()`. To invite someone, use
+      `generateLink({ type: "invite" })` and deliver the link ourselves, never
+      `inviteUserByEmail()`. (Audited 2026-10-25: none of the six present.)
+- [ ] **Email OTP length is 8 digits** on both projects (Supabase's default),
+      not 6. We send `token_hash` links, not typed codes, so nothing reads it
+      today; any future code-entry UI must accept 8 digits. (Local
+      `config.toml` still says 6.)
 - [ ] **The project is empty before the first `supabase db push`.** Check it
       yourself (`supabase migration list --linked` shows no remote
       migrations; `supabase inspect db table-stats --linked` shows no
       `public` tables) rather than taking anyone's word for it. Then
       `supabase db push` applies 0001-0003.
-- [ ] **JWT signing keys are asymmetric (ES256 or RS256), not legacy HS256.**
+- [x] **JWT signing keys are asymmetric (ES256 or RS256), not legacy HS256.**
+      Both ACM projects: ES256.
       `getClaims()` verifies ES256/RS256 tokens locally against the cached
       JWKS. With HS256 it falls back to `getUser()`, a round trip to the auth
       server on every gated request: extra latency on every page load at the
@@ -30,8 +55,11 @@ live in [event-week-runbook.md](event-week-runbook.md).
       local to whatever hosted runs.
 - [ ] **Do not `supabase config push`** the local `[auth.rate_limit]
 email_sent = 1000`. Production doesn't send through Supabase's mailer.
-- [ ] **OTP expiry** raised to a few hours for the event (default 1h, max 24h,
-      via the Management API). See docs/auth-and-checkin-flow.md.
+- [x] **OTP expiry** 14400 s (4 hours) on both projects. Clicks happen within
+      minutes at check-in and within hours for credential and schedule
+      emails; a session persists by refresh token once created, so this only
+      bounds time-to-first-click. Raise to 8 hours during the event if resends
+      get annoying, no further (AWS credentials sit behind the session).
 - [ ] **Fallback SMTP provider** configured, so Apps Script failing isn't a
       code change at 9:30am (docs/auth-and-checkin-flow.md).
 
