@@ -3,8 +3,7 @@
 // Run after `next build` (npm run test:smoke does both). Needs local Supabase
 // running (npx supabase start); it creates two smoke-test users there.
 import { spawn } from "node:child_process";
-import { createServerClient } from "@supabase/ssr";
-import { createClient } from "@supabase/supabase-js";
+import { setRole, signIn } from "./lib/session.mjs";
 
 const PORT = 3100;
 const base = `http://127.0.0.1:${PORT}`;
@@ -88,64 +87,6 @@ async function expectStatus(path, cookie, expected) {
   if (res.status !== expected) {
     throw new Error(`${path}: expected HTTP ${expected}, got ${res.status}`);
   }
-}
-
-function admin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !secret) {
-    throw new Error("Supabase env missing (.env.local); is it set up?");
-  }
-  return createClient(url, secret, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
-// Sets profiles.role with the service role. No JWT, so the role-guard
-// trigger allows it, exactly like bootstrapping an organizer.
-async function setRole(userId, role) {
-  const { error } = await admin()
-    .from("profiles")
-    .update({ role })
-    .eq("user_id", userId);
-  if (error) throw new Error(`set role: ${error.message}`);
-}
-
-// Signs `email` in the way the app does (generateLink, then verifyOtp on the
-// token_hash) and returns the resulting auth cookies as a Cookie header.
-// Local Supabase only: this creates smoke-*@example.test users.
-async function signIn(email, role = "participant") {
-  const { data, error } = await admin().auth.admin.generateLink({
-    type: "magiclink",
-    email,
-  });
-  if (error) {
-    throw new Error(`generateLink: ${error.message} (npx supabase start?)`);
-  }
-  // Explicit, so a re-run starts from a known role.
-  await setRole(data.user.id, role);
-
-  const jar = new Map();
-  const client = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-    {
-      cookies: {
-        getAll: () => [...jar].map(([name, value]) => ({ name, value })),
-        setAll: (cookies) =>
-          cookies.forEach(({ name, value }) =>
-            value ? jar.set(name, value) : jar.delete(name),
-          ),
-      },
-    },
-  );
-  const { error: verifyError } = await client.auth.verifyOtp({
-    token_hash: data.properties.hashed_token,
-    type: data.properties.verification_type,
-  });
-  if (verifyError) throw new Error(`verifyOtp: ${verifyError.message}`);
-  const cookie = [...jar].map(([name, value]) => `${name}=${value}`).join("; ");
-  return { cookie, userId: data.user.id };
 }
 
 async function waitFor(url, timeoutMs) {
