@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.join(ROOT, "scheduler"))
 
 import scheduler as S  # noqa: E402
 from pipeline import make_teams, roster  # noqa: E402
+from stage0 import coverage_capacity  # noqa: E402
 from pipeline2 import solve  # noqa: E402
 
 SPONSORS = ["AWS", "A10", "GCP", "MSFT"]
@@ -124,6 +125,24 @@ def numerics():
     return out
 
 
+def capacity_cases():
+    rng = random.Random(55)
+    out = []
+    for i in range(40):
+        k = rng.randint(1, 4)
+        sponsors = SPONSORS[:k]
+        T = rng.randint(30, 70)
+        probs = {s: round(rng.uniform(0.1, 0.8), 3) for s in sponsors}
+        kw = {s: rng.randint(0, 4) for s in sponsors}
+        kw["none"] = rng.randint(4, 14)
+        tt = make_teams(T, probs, seed=i)
+        judges = roster(**kw)
+        n_slots = -(-2 * T // max(len(judges) // 2, 1))
+        out.append({"teamTracks": [sorted(t) for t in tt], "judges": judges, "nSlots": n_slots,
+                    "rows": coverage_capacity(judges, tt, n_slots)})
+    return out
+
+
 def regression():
     judges = roster(AWS=4, A10=3, none=9)
     explicit = [{"AWS", "A10"}] * 12 + [{"AWS"}] * 24 + [{"A10"}] * 12 + [set()] * 12
@@ -171,6 +190,7 @@ def main():
         "track": track,
         "plain": plain,
         "regression": regression(),
+        "capacity": capacity_cases(),
         "hashSeedDependent": track_dropped + plain_dropped,
     }
     path = os.path.join(HERE, "goldens.json")

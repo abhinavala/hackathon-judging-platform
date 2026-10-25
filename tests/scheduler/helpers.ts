@@ -85,6 +85,19 @@ type Goldens = {
       spaced: number[] | null;
     }
   >;
+  capacity: {
+    teamTracks: Sponsor[][];
+    judges: JudgeRoster;
+    nSlots: number;
+    rows: {
+      sponsor: Sponsor;
+      judges: number;
+      teams_wanting: number;
+      capacity: number;
+      ok: boolean;
+      min_judges: number;
+    }[];
+  }[];
   regression: Record<
     string,
     {

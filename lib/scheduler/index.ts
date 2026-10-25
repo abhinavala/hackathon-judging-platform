@@ -18,4 +18,12 @@ export { assignTeams, assignPanelPairs } from "./stage1.ts";
 export { edgeColor } from "./color.ts";
 export { improveSpacing } from "./spacing.ts";
 export { verify } from "./verify.ts";
+export {
+  coverageCapacity,
+  preflight,
+  slotsFor,
+  type CapacityRow,
+  type Preflight,
+  type PreflightWarning,
+} from "./capacity.ts";
 export { PyRandom, pyRound, pySum } from "./python.ts";
