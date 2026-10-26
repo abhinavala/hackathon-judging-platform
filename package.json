@@ -15,6 +15,7 @@
     "db:reset": "supabase db reset",
     "db:types": "supabase gen types typescript --local > lib/database.types.ts",
     "seed": "node --env-file-if-exists=.env.local scripts/seed.mts",
+    "bootstrap:event": "node --env-file-if-exists=.env.local scripts/bootstrap-event.mts",
     "test:rls": "node scripts/test-rls.mjs",
     "test:smoke": "next build && node --env-file-if-exists=.env.local scripts/smoke.mjs",
     "test:scheduler": "node --test \"tests/scheduler/*.test.ts\"",

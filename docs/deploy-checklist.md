@@ -127,6 +127,44 @@ test:rls` at hosted Supabase.** The seed writes 60 fake teams (it refuses
 reset`. All three read `.env.local`, so keep hosted credentials out of
       it.
 
+## The event row (once per event)
+
+A fresh database has no event, and every organizer screen says "No event
+exists yet." until it has one. Create it with the bootstrap script (it
+creates only the `events` row; tracks, stations, judges and teams all have
+screens):
+
+```sh
+npm run bootstrap:event -- --project-ref <ref> --confirm \
+  --slug aws-a10-2026 --name "AWS x A10 Hack" --year 2026 \
+  --judging-start 2026-11-08T10:00 \
+  --help-location "the check-in table by the main entrance"
+# optional: --timezone (default America/Los_Angeles), --slot-minutes (default 7)
+```
+
+- [ ] Run it with `--dry-run` first: it validates everything, checks the
+      slug is free, and prints what it would create without writing.
+- [ ] `--judging-start` is wall-clock time in the event's zone. Every flag
+      can also come from an env var (`EVENT_SLUG`, `EVENT_NAME`,
+      `EVENT_YEAR`, `EVENT_TIMEZONE`, `EVENT_SLOT_MINUTES`,
+      `EVENT_JUDGING_START`, `EVENT_HELP_LOCATION`); a flag wins.
+- [ ] `--project-ref` fetches the project's secret key from the Supabase
+      CLI (`npx supabase login` first) and never prints or stores it. Any
+      non-local database also needs `--confirm`; without it the script
+      refuses before connecting.
+- [ ] It refuses if the slug already exists and never updates a row. Change
+      the judging start and help location afterwards on `/organizer/event`.
+- [ ] One event per database. The organizer screens treat the newest event
+      of the latest year as "the" event, so a second 2026 event would take
+      over the screens. Don't create test events on production.
+- [ ] Then, on the organizer screens: Tracks, Stations (with their
+      locations: the board and the team page lead with them), Judges, Import
+      teams.
+
+Post-event improvement: a "create event" screen. Next year's officers
+shouldn't need to run a script, but creating the event happens once a year
+and a documented script is acceptable for now.
+
 ## Rendering: status codes under cacheComponents
 
 - [ ] **Under `cacheComponents`, any page-level `redirect()` or `notFound()`
