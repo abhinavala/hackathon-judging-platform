@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { headers } from "next/headers";
@@ -12,18 +13,22 @@ import { PrintButton } from "./print-button";
 // prerendering (as the guard layout does).
 export const instant = false;
 
-// The paper on the wall, and the answer to total connectivity failure. It
-// renders the same grid as the CSV export (scheduleGrid on exportFromView),
-// so the printout and the spreadsheet always match.
 /** When this copy was rendered (the request has already opted out of prerendering). */
 function printTime() {
   return Date.now();
 }
 
+// The paper on the wall, and the answer to total connectivity failure. It
+// renders the same grid as the CSV export (scheduleGrid on exportFromView),
+// so the printout and the spreadsheet always match. The wall copy leaves the
+// judges out (participants need where, not who); ?judges=1 prints a staffed
+// organizer copy, labelled so it doesn't end up on the wall.
 export default async function PrintSchedulePage({
   params,
+  searchParams,
 }: PageProps<"/organizer/schedules/[id]/print">) {
-  const { id } = await params;
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const judges = query.judges === "1";
   const db = await adminDb();
   const view = await loadScheduleView(db, id);
   if (!view) notFound();
@@ -31,7 +36,7 @@ export default async function PrintSchedulePage({
   const host = (await headers()).get("host") ?? "";
   const { event, schedule, stations, slots } = view;
   const tz = event.timezone;
-  const grid = scheduleGrid(exportFromView(view));
+  const grid = scheduleGrid(exportFromView(view, { judges }));
   const shown = new Set(grid.rows.map((r) => r[0]));
   const located = stations.filter((s) => shown.has(s.label) && s.locationText);
   const printedAt = printTime();
@@ -57,8 +62,24 @@ export default async function PrintSchedulePage({
             · all times {zone}
           </p>
         </div>
-        <PrintButton />
+        <div className="flex items-center gap-3 text-sm print:hidden">
+          <Link
+            href={`/organizer/schedules/${id}/print${judges ? "" : "?judges=1"}`}
+            className="underline"
+          >
+            {judges
+              ? "Hide judges (wall copy)"
+              : "Show judges (organizer copy)"}
+          </Link>
+          <PrintButton />
+        </div>
       </div>
+
+      {judges && (
+        <p className="mb-3 border-2 border-black p-2 text-lg font-bold">
+          ORGANIZER COPY: lists the judges. Don&apos;t post this one.
+        </p>
+      )}
 
       {schedule.status !== "published" && (
         <p className="mb-3 border-2 border-black p-2 text-lg font-bold">

@@ -513,25 +513,44 @@ async function run() {
     String(cells.length),
   );
 
-  // The printed schedule renders the same grid as the CSV, cell for cell.
+  // The printed schedule renders the same grid as the CSV, cell for cell,
+  // with the judges column off by default (the wall copy) and on with
+  // ?judges=1 (the organizers' copy), mirroring the CSV's ?judges=0|1.
+  const gridOf = (html) =>
+    html
+      .slice(html.indexOf("<table"), html.indexOf("</table>"))
+      .split("<tr")
+      .slice(1)
+      .map((tr) =>
+        [...tr.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/g)].map(([, c]) =>
+          decode(c.replace(/<!-- -->/g, "").replace(/<[^>]+>/g, "")),
+        ),
+      );
   const print = await get(`${draftPath}/print`, org.cookie);
-  const table = print.html.slice(
-    print.html.indexOf("<table"),
-    print.html.indexOf("</table>"),
-  );
-  const printed = table
-    .split("<tr")
-    .slice(1)
-    .map((tr) =>
-      [...tr.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/g)].map(([, c]) =>
-        decode(c.replace(/<!-- -->/g, "").replace(/<[^>]+>/g, "")),
-      ),
-    );
+  const csvNoJudges = await get(`${draftPath}/export?judges=0`, org.cookie);
+  const printed = gridOf(print.html);
   check(
     print.status === 200 &&
-      JSON.stringify(printed) === JSON.stringify(parseCsv(csv.html)),
-    "print view: the same station x time grid as the CSV, cell for cell",
+      JSON.stringify(printed) === JSON.stringify(parseCsv(csvNoJudges.html)),
+    "print view: the wall copy is the CSV's grid (judges off), cell for cell",
     `${printed.length} rows; first ${JSON.stringify(printed[0]?.slice(0, 4))}`,
+  );
+  const judgeNames = parseCsv(csv.html)
+    .slice(1)
+    .flatMap((r) => r[1].split(", "));
+  check(
+    printed[0][1] === "10:00 AM" &&
+      judgeNames.length === 16 &&
+      judgeNames.every((n) => !print.html.includes(n)) &&
+      !text(print.html).includes("ORGANIZER COPY"),
+    "print view: by default no judges column and no judge names anywhere",
+  );
+  const staffed = await get(`${draftPath}/print?judges=1`, org.cookie);
+  check(
+    JSON.stringify(gridOf(staffed.html)) ===
+      JSON.stringify(parseCsv(csv.html)) &&
+      text(staffed.html).includes("ORGANIZER COPY: lists the judges."),
+    "print view: ?judges=1 is the CSV's default grid, labelled as the organizer copy",
   );
   check(
     text(print.html).includes("version 3, published") &&
