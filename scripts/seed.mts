@@ -864,7 +864,7 @@ async function ensureOrganizer(db: ReturnType<typeof createClient<Database>>) {
 
 main().catch((err: unknown) => {
   console.error(
-    `seed failed: ${err instanceof Error ? err.message : String(err)}`,
+    `seed failed: ${err instanceof Error ? err.message : JSON.stringify(err)}`,
   );
   process.exit(1);
 });

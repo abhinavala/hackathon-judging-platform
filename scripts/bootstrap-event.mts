@@ -40,7 +40,16 @@ function hostedKey(ref: string): string {
     fail(`"${ref}" doesn't look like a project ref`);
   const res = spawnSync(
     "npx",
-    ["supabase", "projects", "api-keys", "--project-ref", ref, "-o", "json"],
+    [
+      "supabase",
+      "projects",
+      "api-keys",
+      "--project-ref",
+      ref,
+      "--reveal",
+      "-o",
+      "json",
+    ],
     { encoding: "utf8" },
   );
   if (res.status !== 0)
@@ -52,10 +61,15 @@ function hostedKey(ref: string): string {
     type: string;
     api_key: string;
   }[];
+  // The secret key (the one Vercel holds); the CLI masks it without
+  // --reveal, so a masked value is refused rather than sent. Falls back to
+  // the legacy service_role key.
+  const secret = keys.find((k) => k.type === "secret")?.api_key;
   const key =
-    keys.find((k) => k.type === "secret")?.api_key ??
-    keys.find((k) => k.name === "service_role")?.api_key;
-  if (!key) fail("the project has no secret or service_role key");
+    secret && /^[\x21-\x7e]+$/.test(secret)
+      ? secret
+      : keys.find((k) => k.name === "service_role")?.api_key;
+  if (!key) fail("the project has no usable secret or service_role key");
   return key;
 }
 
