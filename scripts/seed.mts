@@ -12,7 +12,8 @@
 // `npm run db:reset && npm run seed`.
 //
 // Writes with the service role (bypasses RLS). Refuses to run against
-// anything but a local Supabase unless given --allow-remote.
+// anything but a local Supabase unless given --allow-remote (meant for the
+// Preview project), and refuses production even then.
 //
 // Team members and judges are roster rows only, keyed by email: signing in
 // with one of those addresses (the console sender prints the link) links the
@@ -22,6 +23,7 @@
 import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../lib/database.types";
+import { isProductionSupabase } from "../lib/prod-guard.ts";
 
 type Tables = Database["public"]["Tables"];
 type Insert<T extends keyof Tables> = Tables[T]["Insert"];
@@ -588,6 +590,12 @@ async function main() {
     );
   }
   const host = new URL(url).hostname;
+  // Preview exists to hold this fixture; production never does, flag or not.
+  if (isProductionSupabase(url)) {
+    throw new Error(
+      `Refusing to seed ${host}: that is the PRODUCTION project. --allow-remote doesn't override this.`,
+    );
+  }
   if (
     !["127.0.0.1", "localhost"].includes(host) &&
     !process.argv.includes("--allow-remote")

@@ -120,12 +120,38 @@ app/` still returns nothing.
 ## Tests and scripts: local only
 
 - [ ] **Never point `npm run seed`, `npm run test:smoke` or `npm run
-test:rls` at hosted Supabase.** The seed writes 60 fake teams (it refuses
-      a non-local URL without `--allow-remote`); the smoke test signs in real
-      users through the service role and creates `smoke-*@example.test`
-      accounts with judge and organizer roles; `test:rls` runs `supabase db
-reset`. All three read `.env.local`, so keep hosted credentials out of
-      it.
+test:rls` at production.** `test:smoke` (creates `smoke-*@example.test`
+      judge and organizer accounts) and `test:rls` (runs `supabase db reset`)
+      are local only. The seed may target the **Preview** project, which
+      exists to hold disposable fixture data: it needs `--allow-remote`, and
+      it refuses the production project ref even with that flag. All three
+      read `.env.local`, so keep hosted credentials out of it; pass a
+      hosted URL and key in the environment for the one command.
+
+## Mail relay (Apps Script)
+
+- [ ] `apps-script/Code.gs` deployed as a web app (Execute as: Me, Who has
+      access: Anyone), `SHARED_SECRET` set in Script Properties. After any
+      change, bump `RELAY_VERSION` and redeploy.
+- [ ] Health check without sending: `APPS_SCRIPT_URL=... APPS_SCRIPT_SECRET=...
+npm run mail:dry-run -- --ping` prints the relay version and remaining
+      daily quota.
+- [ ] Production: `AUTH_LINK_SENDER=appsScript`, `APPS_SCRIPT_URL`,
+      `APPS_SCRIPT_SECRET` (server-only). Preview stays on `console`, which
+      refuses to send on a deployment (it would write live links into
+      Vercel's logs), so signing in on a preview fails visibly.
+- [ ] `AUTH_LINK_REDIRECT_TO` (comma-separated inboxes) is for dry runs
+      only: every link goes to one of those inboxes with the real recipient
+      in the subject. It refuses to run when the Supabase URL is the
+      production project or `VERCEL_ENV` is production. **Never set it on
+      Production.**
+- [ ] Full-scale rehearsal on Preview: seed Preview, then
+      `npm run mail:dry-run -- --project-ref <preview ref> --site-url
+https://<preview deployment> --inboxes a@...,b@...,c@... --confirm`.
+      It mints a link for every member, sends them to the relay as one
+      batch, and reports the send's wall time against Apps Script's 360 s
+      limit, and the quota before and after. It never prints a link and
+      refuses the production ref.
 
 ## The event row (once per event)
 
