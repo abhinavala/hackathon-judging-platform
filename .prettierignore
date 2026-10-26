@@ -6,3 +6,4 @@ package-lock.json
 *.sql
 *.md
 scheduler
+apps-script

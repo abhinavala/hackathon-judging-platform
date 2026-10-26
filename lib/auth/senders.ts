@@ -1,21 +1,21 @@
 import "server-only";
+import { SUPABASE_URL } from "@/lib/env";
+import { callRelay, type LinkMessage } from "@/lib/auth/relay";
+import {
+  parseInboxes,
+  redirectMessage,
+  redirectRefusal,
+} from "@/lib/auth/redirect";
 import {
   appsScriptSecret,
   appsScriptUrl,
   isProduction,
+  linkRedirectInboxes,
   linkSenderName,
   mailpitUrl,
 } from "@/lib/server-env";
 
-// Which email the link goes out in. Phase 2 adds the check-in receipt and the
-// teammate invite; the Apps Script picks subject and body by this name.
-export type LinkTemplate = "sign-in";
-
-export type LinkMessage = {
-  email: string;
-  link: string;
-  template: LinkTemplate;
-};
+export type { LinkMessage, LinkTemplate } from "@/lib/auth/relay";
 
 // Delivers an already-minted sign-in link. Throws if delivery failed, so the
 // caller can tell the person rather than claim an email is on its way.
@@ -24,14 +24,21 @@ export interface LinkSender {
 }
 
 export function getLinkSender(): LinkSender {
-  switch (linkSenderName()) {
-    case "console":
-      return consoleSender;
-    case "mailpit":
-      return mailpitSender;
-    case "appsScript":
-      return appsScriptSender;
-  }
+  const sender = {
+    console: consoleSender,
+    mailpit: mailpitSender,
+    appsScript: appsScriptSender,
+  }[linkSenderName()];
+  const inboxes = parseInboxes(linkRedirectInboxes());
+  if (inboxes.length === 0) return sender;
+  // Dry run: refuse on production (by project ref and by deployment), then
+  // send each link to a test inbox with the real recipient in the subject.
+  const refusal = redirectRefusal({
+    supabaseUrl: SUPABASE_URL,
+    vercelEnv: process.env.VERCEL_ENV,
+  });
+  if (refusal) throw new Error(`AUTH_LINK_REDIRECT_TO is set, but ${refusal}`);
+  return { send: (m) => sender.send(redirectMessage(m, inboxes)) };
 }
 
 // Local dev: print the link to the server log. Refuses to run in production,
@@ -49,7 +56,7 @@ const consoleSender: LinkSender = {
 // (http://127.0.0.1:54324), through its HTTP send API, so the email can be
 // opened on another device on the same network.
 const mailpitSender: LinkSender = {
-  async send({ email, link, template }) {
+  async send({ email, link, template, data }) {
     if (isProduction) {
       throw new Error("The mailpit link sender is disabled in production");
     }
@@ -59,8 +66,12 @@ const mailpitSender: LinkSender = {
       body: JSON.stringify({
         From: { Email: "noreply@judging.local", Name: "Hackathon Judging" },
         To: [{ Email: email }],
-        Subject: `Your sign-in link (${template})`,
-        Text: `Sign in: ${link}\n\nThis link works once.`,
+        Subject: `Your sign-in link (${template})${data?.subjectTag ? ` [${data.subjectTag}]` : ""}`,
+        Text:
+          `Sign in: ${link}\n\nThis link works once.` +
+          (data?.teamName
+            ? `\n\nTeam: ${data.teamName}${data.joinCode ? ` (code ${data.joinCode})` : ""}`
+            : ""),
       }),
       signal: AbortSignal.timeout(10_000),
     });
@@ -71,35 +82,18 @@ const mailpitSender: LinkSender = {
 // Production: a Google Apps Script web app that sends from the scu.edu
 // Workspace account. See docs/auth-and-checkin-flow.md.
 //
-// The shared secret travels in the JSON body, not a header: an Apps Script
-// doPost(e) receives the body and query string but not the request headers,
-// so a header secret could never be checked. The script must compare
-// `secret` and reply with JSON `{ "ok": true }` once the mail is sent.
+// The wire format and the secret-in-the-body rule are in lib/auth/relay.ts.
+// The templates read `data` (team name, join code); without it they fall
+// back to "your team".
 const appsScriptSender: LinkSender = {
-  async send({ email, link, template }) {
-    const res = await fetch(appsScriptUrl(), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        email,
-        link,
-        template,
-        secret: appsScriptSecret(),
-      }),
-      // Apps Script answers a POST with a redirect to the script's output.
-      redirect: "follow",
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) throw new Error(`Apps Script send failed: HTTP ${res.status}`);
-    const body: unknown = await res.json().catch(() => null);
-    if (!isOk(body)) {
-      throw new Error(`Apps Script send failed: ${JSON.stringify(body)}`);
-    }
+  async send(message) {
+    const reply = await callRelay(
+      appsScriptUrl(),
+      appsScriptSecret(),
+      message,
+      15_000,
+    );
+    if (!reply.ok)
+      throw new Error(`Apps Script send failed: ${JSON.stringify(reply)}`);
   },
 };
-
-function isOk(body: unknown): boolean {
-  return typeof body === "object" && body !== null && "ok" in body
-    ? body.ok === true
-    : false;
-}

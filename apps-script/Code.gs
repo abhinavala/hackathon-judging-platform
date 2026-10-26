@@ -20,6 +20,9 @@
 var SECRET_PROP = 'SHARED_SECRET';
 var FROM_NAME   = 'SCU ACM';
 var REPLY_TO    = 'acm@scu.edu';
+// Bump on every change; ping reports it so the caller can confirm which
+// deployment is live.
+var RELAY_VERSION = 2;
 
 // ---------------------------------------------------------------- entry point
 function doPost(e) {
@@ -44,6 +47,7 @@ function doPost(e) {
       return json({
         ok: true,
         pong: true,
+        relayVersion: RELAY_VERSION,
         quotaRemaining: MailApp.getRemainingDailyQuota()
       });
     }
@@ -74,6 +78,11 @@ function doPost(e) {
       try {
         if (!m.email || !m.link) throw new Error('missing_email_or_link');
         var built = render(m.template, m.link, m.data || {});
+        // Dry runs redirect links to test inboxes and tag the subject with
+        // the real recipient (the server decides; this only prefixes).
+        if (m.data && m.data.subjectTag) {
+          built.subject = '[' + String(m.data.subjectTag).slice(0, 120) + '] ' + built.subject;
+        }
         MailApp.sendEmail({
           to: m.email,
           subject: built.subject,
