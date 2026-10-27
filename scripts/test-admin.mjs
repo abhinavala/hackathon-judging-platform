@@ -1445,9 +1445,9 @@ async function run() {
   check(
     ci.includes("Check in your team") &&
       ci.includes(awsTrack13.name) &&
-      ci.includes("Teammate 4: email") &&
-      !ci.includes("Teammate 5"),
-    "check-in: the public form lists the event's tracks and up to 4 teammates",
+      ci.includes("Teammate 5: email") &&
+      !ci.includes("Teammate 6"),
+    "check-in: the public form lists the event's tracks and up to 5 teammates (6 people)",
   );
 
   const { count: teamsBefore13 } = await db
@@ -1487,7 +1487,10 @@ async function run() {
   const { count: teamsAfterErrors } = await db
     .from("teams")
     .select("*", { count: "exact", head: true });
-  check(teamsAfterErrors === teamsBefore13, "check-in: and nothing was written");
+  check(
+    teamsAfterErrors === teamsBefore13,
+    "check-in: and nothing was written",
+  );
 
   // The real thing, without JavaScript.
   res13 = await postCheckin(checkinForm(), false);
@@ -1614,6 +1617,165 @@ async function run() {
     anonCall?.message,
   );
   await db.from("events").update(window13).eq("id", ev.id);
+
+  // 14. Rate limits on the public form, and the captain's teammates page.
+  await db
+    .from("events")
+    .update({ checkin_opens_at: new Date(Date.now() - 3600_000).toISOString() })
+    .eq("id", ev.id);
+  const flood = async (ip, n) => {
+    const statuses = [];
+    for (let i = 0; i < n; i++) {
+      const r = await fetch(`${BASE}/checkin/submit`, {
+        method: "POST",
+        // The bot field: refused without writing, but still counted.
+        body: checkinForm({ website: "x" }),
+        headers: { accept: "application/json", "x-forwarded-for": ip },
+      });
+      statuses.push(r.status);
+      if (r.status === 429) break;
+    }
+    return statuses;
+  };
+  // 90 a minute per IP. A minute boundary mid-loop resets the count, so allow
+  // up to two windows' worth before expecting the 429.
+  const flooded = await flood("203.0.113.7", 185);
+  check(
+    flooded.at(-1) === 429 && flooded.slice(0, 90).every((x) => x === 422),
+    "rate limit: a flood from one IP is cut off (90 a minute), real traffic up to that passes",
+    `${flooded.length} requests, last ${flooded.at(-1)}`,
+  );
+  check(
+    (await flood("203.0.113.8", 1))[0] === 422,
+    "rate limit: another network is unaffected",
+  );
+
+  check(
+    (await get("/team/members")).status === 307,
+    "teammates page: needs a session (anonymous visitors go to sign-in)",
+  );
+  const riley = await signIn("riley.park@scu.example", "participant");
+  let tm = visible((await get("/team/members", riley.cookie)).html);
+  check(
+    tm.includes("Night Owls: teammates") &&
+      tm.includes("sam.ortiz@scu.example") &&
+      tm.includes("Invited, hasn't signed in yet") &&
+      tm.includes("Resend the invitation"),
+    "teammates page: the captain sees everyone, who hasn't signed in, and the fixes",
+  );
+  const { data: joBefore } = await db
+    .from("team_members")
+    .select("user_id")
+    .eq("email", "jo.lee@scu.example")
+    .single();
+  r = await submit(
+    "/team/members",
+    riley.cookie,
+    'value="jo.lee@scu.example"/><label',
+    { newEmail: "Jo.Leigh@scu.example" },
+  );
+  check(
+    flash(r.url).startsWith(
+      "Changed jo.lee@scu.example to jo.leigh@scu.example.",
+    ),
+    "teammates page: the captain corrects a typo'd address",
+    flash(r.url),
+  );
+  const { data: joAfter } = await db
+    .from("team_members")
+    .select("email, user_id")
+    .eq("team_id", owls.id)
+    .eq("email", "jo.leigh@scu.example")
+    .single();
+  const { data: oldJo } = await db.auth.admin.getUserById(joBefore.user_id);
+  check(
+    joAfter?.user_id && joAfter.user_id !== joBefore.user_id && !oldJo.user,
+    "teammates page: the corrected address gets its own account; the typo's unused account (and live link) is deleted",
+  );
+  const resend = () =>
+    submit(
+      "/team/members",
+      riley.cookie,
+      'value="sam.ortiz@scu.example"/><button',
+      {},
+    );
+  r = await resend();
+  check(
+    /sam\.ortiz@scu\.example/.test(flash(r.url)),
+    "teammates page: the captain resends an invitation",
+    flash(r.url),
+  );
+  await resend();
+  await resend();
+  r = await resend();
+  check(
+    flash(r.url).startsWith(
+      "Not emailed: too many invitations in the last hour",
+    ),
+    "teammates page: one address can't be emailed more than 3 times an hour",
+    flash(r.url),
+  );
+
+  // An address that already has an account (signed in before, no team).
+  const loner = await signIn("loner@scu.example", "participant");
+  r = await submit("/team/members", riley.cookie, "Add and invite", {
+    name: "Lou Ner",
+    email: "loner@scu.example",
+  });
+  const { data: lonerRow } = await db
+    .from("team_members")
+    .select("user_id")
+    .eq("team_id", owls.id)
+    .eq("email", "loner@scu.example")
+    .single();
+  check(
+    flash(r.url).startsWith("Added loner@scu.example.") &&
+      lonerRow?.user_id === loner.userId,
+    "teammates page: adding someone who already has an account links that account to the team",
+    flash(r.url),
+  );
+  for (const n of [1, 2]) {
+    r = await submit("/team/members", riley.cookie, "Add and invite", {
+      email: `extra${n}@scu.example`,
+    });
+  }
+  tm = visible((await get("/team/members", riley.cookie)).html);
+  check(
+    !tm.includes("Add a teammate") && tm.includes("Night Owls: teammates"),
+    "teammates page: at 6 people there's no more adding",
+  );
+  const sam = await signIn("sam.ortiz@scu.example", "participant");
+  tm = visible((await get("/team/members", sam.cookie)).html);
+  check(
+    tm.includes("Only your captain (Riley Park) can change teammates.") &&
+      !tm.includes("Resend the invitation"),
+    "teammates page: a teammate sees the list, read-only",
+  );
+  const crafted = new FormData();
+  for (const [k, v] of Object.entries(
+    Object.fromEntries(
+      formData(
+        findForm(
+          (await get("/team/members", riley.cookie)).html,
+          'value="extra1@scu.example"/><button',
+        ),
+      ),
+    ),
+  ))
+    crafted.append(k, v);
+  const asSam = await fetch(`${BASE}/team/members`, {
+    method: "POST",
+    body: crafted,
+    headers: { cookie: sam.cookie },
+    redirect: "manual",
+  });
+  check(
+    new URL(asSam.headers.get("location") ?? "/", BASE).searchParams.get(
+      "error",
+    ) === "Only your team's captain can change teammates.",
+    "teammates page: a teammate posting the captain's form directly is refused",
+    asSam.headers.get("location"),
+  );
 
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 }

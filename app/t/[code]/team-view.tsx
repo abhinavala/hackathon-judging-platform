@@ -337,6 +337,13 @@ export function TeamViewClient({
               . If someone shows you a different version, this one is current.
             </p>
           )}
+          <p>
+            Captain?{" "}
+            <a href="/team/members" className="underline">
+              Fix a teammate&apos;s email or resend an invitation
+            </a>{" "}
+            (sign-in needed).
+          </p>
           <p suppressHydrationWarning>
             Join code {code} · updated {ago(fetchedAt, serverNow)} · all times{" "}
             {clockWithZone(serverNow, tz).split(" ").pop()}
