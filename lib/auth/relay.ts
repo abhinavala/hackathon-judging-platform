@@ -4,13 +4,16 @@
 // The secret travels in the JSON body: doPost() can't read headers. The relay
 // answers { ok: true, ... } only when every message went out.
 
-export type LinkTemplate = "signin" | "invite" | "schedule" | "credentials";
+export type LinkTemplate =
+  "signin" | "checkin" | "invite" | "schedule" | "credentials";
 
 /** What the templates read; missing fields fall back to "your team" etc. */
 export type LinkData = {
   teamName?: string;
   inviterName?: string;
   joinCode?: string;
+  /** Check-in receipt: how many teammates were invited. */
+  invitedCount?: number;
   /** Prefixed to the subject as "[...]". Used only by the redirect. */
   subjectTag?: string;
 };

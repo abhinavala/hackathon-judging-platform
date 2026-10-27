@@ -23,6 +23,41 @@ export interface LinkSender {
   send(message: LinkMessage): Promise<void>;
 }
 
+/** Per-message outcome of sendAll(): the addresses that failed, and why. */
+export type BatchOutcome = { failed: { email: string; error: string }[] };
+
+/**
+ * Several messages in one go (a check-in's receipt and invites). The relay
+ * takes them as one request; the local senders loop. Never throws: a failed
+ * send is reported per address, because the caller has already done the
+ * durable work and only needs to say what didn't go out.
+ */
+export async function sendAll(
+  sender: LinkSender & { batch?: (m: LinkMessage[]) => Promise<BatchOutcome> },
+  messages: LinkMessage[],
+): Promise<BatchOutcome> {
+  if (sender.batch) {
+    try {
+      return await sender.batch(messages);
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
+      return { failed: messages.map((m) => ({ email: m.email, error })) };
+    }
+  }
+  const failed: BatchOutcome["failed"] = [];
+  for (const m of messages) {
+    try {
+      await sender.send(m);
+    } catch (e) {
+      failed.push({
+        email: m.email,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+  return { failed };
+}
+
 export function getLinkSender(): LinkSender {
   const sender = {
     console: consoleSender,
@@ -38,7 +73,19 @@ export function getLinkSender(): LinkSender {
     vercelEnv: process.env.VERCEL_ENV,
   });
   if (refusal) throw new Error(`AUTH_LINK_REDIRECT_TO is set, but ${refusal}`);
-  return { send: (m) => sender.send(redirectMessage(m, inboxes)) };
+  const original = sender as typeof sender & {
+    batch?: (m: LinkMessage[]) => Promise<BatchOutcome>;
+  };
+  return {
+    send: (m) => sender.send(redirectMessage(m, inboxes)),
+    ...(original.batch
+      ? {
+          // Failures come back by test inbox, which is all the relay knows.
+          batch: (ms: LinkMessage[]) =>
+            original.batch!(ms.map((m, i) => redirectMessage(m, inboxes, i))),
+        }
+      : {}),
+  } as LinkSender;
 }
 
 // Local dev: print the link to the server log. Refuses to run in production,
@@ -85,7 +132,27 @@ const mailpitSender: LinkSender = {
 // The wire format and the secret-in-the-body rule are in lib/auth/relay.ts.
 // The templates read `data` (team name, join code); without it they fall
 // back to "your team".
-const appsScriptSender: LinkSender = {
+const appsScriptSender: LinkSender & {
+  batch: (m: LinkMessage[]) => Promise<BatchOutcome>;
+} = {
+  async batch(messages) {
+    const reply = await callRelay(
+      appsScriptUrl(),
+      appsScriptSecret(),
+      { messages },
+      60_000,
+    );
+    if (reply.ok) return { failed: [] };
+    if (reply.failed)
+      return {
+        failed: reply.failed.map((f) => ({
+          email: f.email ?? "?",
+          error: f.error,
+        })),
+      };
+    const error = reply.error ?? JSON.stringify(reply);
+    return { failed: messages.map((m) => ({ email: m.email, error })) };
+  },
   async send(message) {
     const reply = await callRelay(
       appsScriptUrl(),

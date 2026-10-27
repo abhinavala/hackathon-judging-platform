@@ -1,9 +1,7 @@
 import "server-only";
-import { createClient } from "@supabase/supabase-js";
 import type { EmailOtpType } from "@supabase/supabase-js";
-import type { Database } from "@/lib/database.types";
-import { SUPABASE_URL } from "@/lib/env";
-import { serviceRoleKey, siteUrl } from "@/lib/server-env";
+import { siteUrl } from "@/lib/server-env";
+import { serviceClient } from "@/lib/supabase/service";
 import { getLinkSender, type LinkTemplate } from "@/lib/auth/senders";
 import type { LinkData } from "@/lib/auth/relay";
 import { callbackLink } from "@/lib/auth/link-url";
@@ -25,11 +23,7 @@ export const VERIFIABLE_TYPES: readonly EmailOtpType[] = [
 // verifyOtp(). That is what makes it work on a different device from the one
 // that asked for it, and generateLink() is incompatible with the PKCE code
 // exchange anyway (supabase/auth-js#767). Do not switch this to action_link.
-function adminClient() {
-  return createClient<Database>(SUPABASE_URL, serviceRoleKey(), {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
+const adminClient = serviceClient;
 
 export async function mintSignInLink(email: string): Promise<string> {
   const admin = adminClient();
@@ -77,12 +71,4 @@ async function linkData(email: string): Promise<LinkData> {
   }
 }
 
-// Light validation only; the auth server is the real judge of an address.
-export function normalizeEmail(raw: unknown): string | null {
-  if (typeof raw !== "string") return null;
-  const email = raw.trim().toLowerCase();
-  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return null;
-  }
-  return email;
-}
+export { normalizeEmail } from "@/lib/auth/email";

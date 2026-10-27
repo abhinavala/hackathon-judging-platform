@@ -341,6 +341,9 @@ isOneToOne: false
 "board_view":
 { Args: { "p_event_slug": string }; Returns: Json
                            },
+"check_in_team":
+{ Args: { "p": Json }; Returns: Json
+                           },
 "is_organizer":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },

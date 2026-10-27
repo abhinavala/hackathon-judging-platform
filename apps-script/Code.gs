@@ -22,7 +22,7 @@ var FROM_NAME   = 'SCU ACM';
 var REPLY_TO    = 'acm@scu.edu';
 // Bump on every change; ping reports it so the caller can confirm which
 // deployment is live.
-var RELAY_VERSION = 2;
+var RELAY_VERSION = 3;
 
 // ---------------------------------------------------------------- entry point
 function doPost(e) {
@@ -122,6 +122,23 @@ function render(template, link, data) {
 
   switch (template) {
 
+    case 'checkin':
+      // The captain's receipt: proof the check-in landed, even if they never
+      // click the link, with the join code that works without signing in.
+      var invited = Number(data.invitedCount) || 0;
+      return wrap(
+        team + ' is checked in',
+        '<p><strong>' + esc(team) + '</strong> is checked in for the AWS x A10 Hack.</p>' +
+          (invited
+            ? '<p>We emailed ' + invited + (invited === 1 ? ' teammate an invitation' : ' teammates invitations') +
+              ' to join. If someone did not get theirs, they can sign in with their own email.</p>'
+            : '') +
+          '<p>Sign in to see your judging times and location.</p>',
+        'Sign in',
+        link,
+        code
+      );
+
     case 'invite':
       return wrap(
         inviter + ' added you to ' + team,
@@ -191,7 +208,7 @@ function wrap(subject, bodyHtml, buttonLabel, link, code) {
 
   var text =
     subject + '\n\n' +
-    bodyHtml.replace(/<[^>]+>/g, '') + '\n\n' +
+    plain(bodyHtml) + '\n\n' +
     link + '\n\n' +
     'This link expires in 4 hours and can only be used once.' +
     (code ? '\n\nTeam code: ' + code : '');
@@ -204,6 +221,17 @@ function json(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// HTML body -> plain text: paragraphs on their own lines, tags dropped,
+// esc()'d characters restored (a team called "R&D" stays "R&D").
+function plain(html) {
+  return html
+    .replace(/<\/p>\s*/g, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+    .trim();
 }
 
 function esc(s) {
