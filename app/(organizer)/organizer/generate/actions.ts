@@ -62,6 +62,12 @@ export async function generateDraft(form: FormData) {
     loadTeams(db, event.id),
     loadSchedules(db, event.id),
   ]);
+  // After publishing, the generator re-packs everyone; late changes don't.
+  const live = schedules.find((s) => s.status === "published");
+  if (live && form.get("regenerateAfterPublish") !== "on")
+    back(PATH, {
+      error: `v${live.version} is published: tick "Regenerate anyway", or use late changes on v${live.version}, which move nobody.`,
+    });
   const teams = allTeams.filter((t) => teamIds.has(t.id));
   if (teams.length === 0) back(PATH, { error: "Pick at least one team." });
 

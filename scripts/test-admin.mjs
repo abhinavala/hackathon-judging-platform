@@ -316,8 +316,17 @@ async function run() {
     flash(r.url),
   );
 
-  // 4. Generate -> preview.
+  // 4. Generate -> preview. v1 is published (seed), so regenerating needs
+  // the explicit acknowledgement that everyone's times may change.
   r = await submit("/organizer/generate", org.cookie, "Generate draft", {});
+  check(
+    /v1 is published: tick "Regenerate anyway"/.test(flash(r.url)),
+    "generate: after publishing, regenerating is refused without the acknowledgement",
+    flash(r.url),
+  );
+  r = await submit("/organizer/generate", org.cookie, "Generate draft", {
+    regenerateAfterPublish: "on",
+  });
   check(
     r.status === 303 &&
       /\/organizer\/schedules\/[0-9a-f-]{36}$/.test(r.url?.pathname ?? ""),
@@ -581,7 +590,7 @@ async function run() {
     "/organizer/generate",
     org.cookie,
     "Generate draft",
-    { mode: "keep", team: teamIds.slice(1) },
+    { mode: "keep", team: teamIds.slice(1), regenerateAfterPublish: "on" },
     { keepChecked: false },
   );
   check(
@@ -1167,6 +1176,188 @@ async function run() {
     board.slice(0, 240),
   );
   await db.from("schedules").update({ status: "published" }).eq("id", v3.id);
+
+  // 12. Late changes to the published version (Phase 3 Part 5): a late team
+  // is seated without moving anyone, a dropped team's seats stay empty, and
+  // both show in the version diff. The generator is never re-run.
+  const seatsOf = async (scheduleId) => {
+    const { data } = await db
+      .from("assignments")
+      .select("team_id, panel_id, status, slots(starts_at)")
+      .eq("schedule_id", scheduleId);
+    return new Map(
+      data
+        .filter((x) => x.status !== "cancelled")
+        .map((x) => [`${x.team_id}|${x.slots.starts_at}`, x.panel_id]),
+    );
+  };
+  const publishDraft = async (path) => {
+    const page = await get(path, org.cookie);
+    const acks = Object.fromEntries(
+      [...page.html.matchAll(/name="(ack:[\w-]+)"/g)].map((m) => [m[1], "on"]),
+    );
+    return submit(path, org.cookie, "I&#x27;ve reviewed this", acks, {
+      keepChecked: false,
+    });
+  };
+  const { data: awsTrack12 } = await db
+    .from("tracks")
+    .select("id")
+    .eq("sponsor", "AWS")
+    .limit(1)
+    .single();
+  const { data: lateTeam } = await db
+    .from("teams")
+    .insert({
+      event_id: ev.id,
+      name: "Late Arrival",
+      join_code: "LATE-0001",
+      checked_in_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  await db
+    .from("team_tracks")
+    .insert({ team_id: lateTeam.id, track_id: awsTrack12.id });
+  const v3Seats = await seatsOf(v3.id);
+  const v3Path = `/organizer/schedules/${v3.id}`;
+  check(
+    text((await get(v3Path, org.cookie)).html).includes("Late changes"),
+    "late changes: the published version offers them",
+  );
+
+  r = await submit(v3Path, org.cookie, "with this team", {
+    teamId: lateTeam.id,
+  });
+  const insertPath = r.url?.pathname ?? "";
+  const insertId = insertPath.split("/").pop();
+  const { data: insertRow } = await db
+    .from("schedules")
+    .select("version, status, stats")
+    .eq("id", insertId)
+    .single();
+  check(
+    insertRow?.status === "draft" &&
+      insertRow.stats.basedOn.version === 3 &&
+      insertRow.stats.lateChange.kind === "insert",
+    "late team: drafts the next version as a copy of v3, not a regeneration",
+    JSON.stringify(insertRow?.stats?.basedOn),
+  );
+  let page12 = text((await get(insertPath, org.cookie)).html);
+  check(
+    page12.includes("Late change to v3: adds Late Arrival at") &&
+      page12.includes("2 slots added at the end (the schedule was full)") &&
+      page12.includes("0 moved, 1 added, 0 removed"),
+    "late team: the draft says what it adds, and the diff shows 1 added, 0 moved",
+    page12.slice(
+      page12.indexOf("Late change"),
+      page12.indexOf("Late change") + 200,
+    ),
+  );
+  const insertSeats = await seatsOf(insertId);
+  check(
+    [...v3Seats].every(([k, panel]) => insertSeats.get(k) === panel) &&
+      insertSeats.size === v3Seats.size + 2,
+    "late team: every v3 team keeps its station and time; the late team gets two seats",
+    `${v3Seats.size} -> ${insertSeats.size}`,
+  );
+  r = await publishDraft(insertPath);
+  check(
+    flash(r.url).startsWith("Published"),
+    "late team: the draft publishes through the normal review",
+    flash(r.url),
+  );
+  check(
+    visible((await get("/t/LATE-0001")).html).includes(
+      "Your first presentation is on",
+    ),
+    "late team: its team page now shows its times",
+  );
+  page12 = text((await get(insertPath, org.cookie)).html);
+  check(
+    page12.includes("Changes from v3 (the version this replaced)") &&
+      page12.includes("Late Arrival — (not scheduled) added:"),
+    "late team: once published, the version still shows its diff against v3",
+  );
+
+  // Drop a team from the new published version.
+  r = await submit(insertPath, org.cookie, "without this team", {
+    teamId: tv.id,
+  });
+  const dropPath = r.url?.pathname ?? "";
+  const dropId = dropPath.split("/").pop();
+  page12 = text((await get(dropPath, org.cookie)).html);
+  check(
+    page12.includes("drops ShelterLink; its seats stay empty") &&
+      page12.includes("0 moved, 0 added, 1 removed") &&
+      page12.includes("dropped (seats left empty)"),
+    "drop: the draft names the team and the diff shows 1 removed, 0 moved",
+  );
+  const { data: dropRows } = await db
+    .from("assignments")
+    .select("status")
+    .eq("schedule_id", dropId)
+    .eq("team_id", tv.id);
+  const dropSeats = await seatsOf(dropId);
+  check(
+    dropRows.length === 2 &&
+      dropRows.every((x) => x.status === "cancelled") &&
+      [...insertSeats]
+        .filter(([k]) => !k.startsWith(tv.id))
+        .every(([k, panel]) => dropSeats.get(k) === panel),
+    "drop: its assignments are cancelled, nothing is re-packed, nobody else moves",
+  );
+
+  // A second late change drafted from the same version goes stale once the
+  // first is published.
+  const { data: secondLate } = await db
+    .from("teams")
+    .insert({ event_id: ev.id, name: "Later Still", join_code: "LATE-0002" })
+    .select("id")
+    .single();
+  r = await submit(insertPath, org.cookie, "with this team", {
+    teamId: secondLate.id,
+  });
+  const stalePath = r.url?.pathname ?? "";
+  r = await publishDraft(dropPath);
+  check(flash(r.url).startsWith("Published"), "drop: publishes", flash(r.url));
+  check(
+    visible((await get(`/t/${code}`)).html).includes(
+      "Your team isn't in the judging schedule.",
+    ),
+    "drop: the dropped team's page says it isn't scheduled",
+  );
+  r = await publishDraft(stalePath);
+  check(
+    /structural errors/.test(flash(r.url)) &&
+      text((await get(stalePath, org.cookie)).html).includes(
+        "Publishing it would undo whatever changed since",
+      ),
+    "stale late change: a draft copied from an older version can't be published",
+    flash(r.url),
+  );
+  r = await submit(stalePath, org.cookie, "Discard draft", {});
+  check(
+    /^Discarded draft v\d+\.$/.test(flash(r.url)),
+    "a draft nobody will publish can be discarded",
+    flash(r.url),
+  );
+
+  // The dropped team's seats are free again: the next late team uses them
+  // instead of growing the schedule.
+  r = await submit(dropPath, org.cookie, "with this team", {
+    teamId: secondLate.id,
+  });
+  const { data: refill } = await db
+    .from("schedules")
+    .select("stats")
+    .eq("id", r.url?.pathname.split("/").pop())
+    .single();
+  check(
+    refill?.stats.lateChange.appendedSlots === 0,
+    "a later late team takes the seats a dropped team left, without adding slots",
+    JSON.stringify(refill?.stats.lateChange),
+  );
 
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 }

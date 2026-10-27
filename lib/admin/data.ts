@@ -15,12 +15,27 @@ export type EventRow = Database["public"]["Tables"]["events"]["Row"];
 /** Draft station composition, stored on the schedule until it is published. */
 export type PanelJudges = { panelId: string; judgeIds: string[] }[];
 
+/** What a late-change draft did to the version it copies (lib/admin/late-change.ts). */
+export type LateChange =
+  | {
+      kind: "insert";
+      teamId: string;
+      teamName: string;
+      seats: { label: string; startsAt: string }[];
+      appendedSlots: number;
+      missing: string[];
+    }
+  | { kind: "drop"; teamId: string; teamName: string };
+
 export type ScheduleStats = {
   seed?: number;
   mode?: "auto" | "keep";
   slotMinutes?: number;
   teamIds?: string[];
   panelJudges?: PanelJudges;
+  /** Late changes: the published version this draft copies. */
+  basedOn?: { id: string; version: number };
+  lateChange?: LateChange;
   solver?: Record<string, unknown>;
   [key: string]: unknown;
 };
@@ -302,8 +317,20 @@ export async function loadScheduleView(
   const published =
     schedules.find((s) => s.status === "published" && s.id !== schedule.id) ??
     null;
-  const publishedContents = published
-    ? await scheduleContents(db, published.id)
+  // What the diff compares against: for a draft, what participants see now;
+  // for a published or archived version, the version it replaced (the
+  // newest earlier one that was published), so a late change stays visible
+  // on the version that made it.
+  const compareTo =
+    schedule.status === "draft"
+      ? published
+      : (schedules
+          .filter(
+            (s) => s.status === "archived" && s.version < schedule.version,
+          )
+          .sort((a, b) => b.version - a.version)[0] ?? null);
+  const publishedContents = compareTo
+    ? await scheduleContents(db, compareTo.id)
     : null;
 
   return {
@@ -332,13 +359,15 @@ export async function loadScheduleView(
       excludedTeams: teams
         .filter((t) => t.checkedIn && !scheduled.has(t.id))
         .map((t) => ({ id: t.id, name: t.name })),
+      basedOnVersion: schedule.stats?.basedOn?.version ?? null,
       published:
-        published && publishedContents
+        compareTo && publishedContents
           ? {
-              version: published.version,
+              version: compareTo.version,
               slots: publishedContents.slots,
               stations: stations.map((s) => ({ id: s.id, label: s.label })),
               assignments: publishedContents.assignments,
+              teams: teams.map((t) => ({ id: t.id, name: t.name })),
             }
           : null,
     },

@@ -172,9 +172,51 @@ test("diff against the published version names moved, added and removed teams", 
     "Team 1",
     "Team 2",
   ]);
-  assert.deepEqual(review.diff!.added, ["Team 60"]);
+  assert.deepEqual(
+    review.diff!.added.map((x) => x.name),
+    ["Team 60"],
+  );
   const w = review.warnings.find((x) => x.id === "changes-vs-published")!;
   assert.match(w.title, /v1: 2 moved, 1 added, 0 removed/);
+});
+
+test("a dropped team is named in the diff, with the seats it gave up", () => {
+  const published = eventInput();
+  const draft = eventInput();
+  draft.teams = draft.teams.filter((t) => t.id !== "t5");
+  draft.assignments = draft.assignments.filter((x) => x.teamId !== "t5");
+  draft.published = {
+    version: 3,
+    slots: published.slots,
+    stations: published.stations,
+    assignments: published.assignments,
+    teams: published.teams,
+  };
+  const review = reviewSchedule(draft);
+  assert.deepEqual(review.invalid, []);
+  assert.equal(review.diff!.removed.length, 1);
+  assert.equal(review.diff!.removed[0].name, "Team 6");
+  assert.equal(review.diff!.removed[0].from.length, 2);
+  assert.deepEqual(review.diff!.moved, []);
+  const w = review.warnings.find((x) => x.id === "changes-vs-published")!;
+  assert.ok(w.detail.includes("Team 6: no longer scheduled"));
+});
+
+test("a late change drafted against an older version can't be published", () => {
+  const input = eventInput();
+  const pub = {
+    version: 4,
+    slots: input.slots,
+    stations: input.stations,
+    assignments: input.assignments,
+  };
+  const stale = reviewSchedule({ ...input, basedOnVersion: 3, published: pub });
+  assert.equal(stale.invalid.length, 1);
+  assert.match(stale.invalid[0], /made to v3, but v4 is published now/);
+  assert.deepEqual(
+    reviewSchedule({ ...input, basedOnVersion: 4, published: pub }).invalid,
+    [],
+  );
 });
 
 test("a schedule that doesn't start at the event's judging start is flagged", () => {

@@ -208,6 +208,29 @@ Every warning must be overridable. The organizer decides; the system advises.
   **Never re-run the generator after publishing.**
 - **Dropped teams** mark their assignments `cancelled`. No re-packing.
 
+**As built.** A late change never edits the published version. It drafts the
+next version as a copy of the published one (same slots, seats and times)
+with only that change, and the organizer publishes it through the normal
+review, so it bumps the version teams see and shows in the diff ("1 added,
+0 moved" / "1 removed, 0 moved"). Published and archived versions keep their
+diff against the version they replaced.
+
+- Insertion (`lib/admin/late.ts`) tries every station pair with every pair of
+  free slots, O(D²×S²): 14,400 checks for 8 stations × 15 slots, still
+  instant. The spec's O(D²×S) assumed one slot choice per station, but the
+  two slots have to be chosen together (different, and spaced). It ranks by:
+  fewest appended slots, then tracks covered, then gap ≥ 3, then least-used
+  pair (fewest teams at the two stations, then fewest shared), then the
+  earliest finish. Slots starting within 10 minutes are never offered.
+- A full schedule (60 teams fill 8 × 15 seats exactly) grows by up to two
+  slots at the end rather than moving anyone. A dropped team's seats are
+  free for the next late team.
+- A late-change draft records the version it copied (`stats.basedOn`). If
+  another version is published first, the draft is a structural error and
+  can't be published, since publishing it would undo that change.
+- Generate, once a version is published, requires an explicit "regenerate
+  anyway" acknowledgement and points to late changes instead.
+
 All writes go through the service role, server-side, as with the seed.
 
 ---

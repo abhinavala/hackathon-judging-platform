@@ -1,10 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { adminDb, loadScheduleView } from "@/lib/admin/data";
+import {
+  adminDb,
+  loadScheduleView,
+  loadSchedules,
+  loadTeams,
+} from "@/lib/admin/data";
 import { MAX_SHARED, MIN_GAP, reviewSchedule } from "@/lib/admin/review";
 import { clock } from "@/lib/admin/time";
-import { Flash, Section, button, table } from "../../_ui/ui";
-import { publishSchedule } from "./actions";
+import { Flash, Section, button, input, table } from "../../_ui/ui";
+import {
+  addLateTeam,
+  discardDraft,
+  dropTeam,
+  publishSchedule,
+} from "./actions";
 
 // Reads the organizer's session; blocks on the server rather than
 // prerendering (as the guard layout does).
@@ -25,6 +35,23 @@ export default async function SchedulePage({
   const review = reviewSchedule(view.review);
   const tz = event.timezone;
   const isDraft = schedule.status === "draft";
+  const late = schedule.stats?.lateChange ?? null;
+  const [allTeams, versions] =
+    schedule.status === "published"
+      ? await Promise.all([
+          loadTeams(db, event.id),
+          loadSchedules(db, event.id),
+        ])
+      : [[], []];
+  const inThis = new Set(teams.map((t) => t.id));
+  const unscheduled = allTeams
+    .filter((t) => !inThis.has(t.id))
+    .sort(
+      (a, b) =>
+        Number(b.checkedIn) - Number(a.checkedIn) ||
+        a.name.localeCompare(b.name),
+    );
+  const nextVersion = Math.max(0, ...versions.map((v) => v.version)) + 1;
   const teamName = new Map(teams.map((t) => [t.id, t.name]));
   const used = stations.filter(
     (s) =>
@@ -61,6 +88,21 @@ export default async function SchedulePage({
         </a>
       </p>
       <Flash params={query} />
+
+      {late && (
+        <p className="mb-4 rounded border-2 border-sky-700 p-3 text-sm">
+          <strong>Late change to v{schedule.stats?.basedOn?.version}:</strong>{" "}
+          {late.kind === "insert"
+            ? `adds ${late.teamName} at ${late.seats.map((x) => `${x.label} ${clock(x.startsAt, tz)}`).join(" and ")}${
+                late.appendedSlots
+                  ? `, in ${late.appendedSlots} slot${late.appendedSlots === 1 ? "" : "s"} added at the end (the schedule was full)`
+                  : ""
+              }${late.missing.length ? `. No ${late.missing.join(", ")} judge on either station.` : "."}`
+            : `drops ${late.teamName}; its seats stay empty.`}{" "}
+          Everyone else keeps their seats and times. Copied from the published
+          version, not regenerated.
+        </p>
+      )}
 
       {review.invalid.length > 0 && (
         <div
@@ -250,7 +292,11 @@ export default async function SchedulePage({
 
       {review.diff && (
         <Section
-          title={`Changes from published v${review.diff.againstVersion}`}
+          title={
+            isDraft
+              ? `Changes from published v${review.diff.againstVersion}`
+              : `Changes from v${review.diff.againstVersion} (the version this replaced)`
+          }
         >
           {review.diff.moved.length +
             review.diff.added.length +
@@ -282,18 +328,27 @@ export default async function SchedulePage({
                     </td>
                   </tr>
                 ))}
-                {review.diff.added.map((n) => (
-                  <tr key={n}>
-                    <td>{n}</td>
-                    <td>—</td>
-                    <td>new</td>
+                {review.diff.added.map((a) => (
+                  <tr key={a.name}>
+                    <td>{a.name}</td>
+                    <td>— (not scheduled)</td>
+                    <td>
+                      added:{" "}
+                      {a.to
+                        .map((p) => `${p.label} ${clock(p.startsAt, tz)}`)
+                        .join(", ")}
+                    </td>
                   </tr>
                 ))}
-                {review.diff.removed.map((n) => (
-                  <tr key={n}>
-                    <td>{n}</td>
-                    <td>scheduled</td>
-                    <td>removed</td>
+                {review.diff.removed.map((r) => (
+                  <tr key={r.name}>
+                    <td>{r.name}</td>
+                    <td>
+                      {r.from
+                        .map((p) => `${p.label} ${clock(p.startsAt, tz)}`)
+                        .join(", ")}
+                    </td>
+                    <td>dropped (seats left empty)</td>
                   </tr>
                 ))}
               </tbody>
@@ -327,6 +382,62 @@ export default async function SchedulePage({
           </table>
         </div>
       </Section>
+
+      {schedule.status === "published" && (
+        <Section title="Late changes">
+          <p className="mb-2 max-w-3xl text-sm">
+            Teams have screenshotted these times, so nothing here re-runs the
+            generator. Each change drafts v{nextVersion}: a copy of this version
+            with only that change, for you to review and publish.
+          </p>
+          <div className="flex flex-wrap gap-8">
+            <form action={addLateTeam} className="space-y-1 text-sm">
+              <input type="hidden" name="scheduleId" value={schedule.id} />
+              <label className="flex flex-col">
+                Add a late team (seats in free slots, or at the end)
+                <select name="teamId" required className={input}>
+                  <option value="">Pick a team…</option>
+                  {unscheduled.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                      {t.checkedIn ? "" : " (not checked in)"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className={button}>
+                Draft v{nextVersion} with this team
+              </button>
+            </form>
+            <form action={dropTeam} className="space-y-1 text-sm">
+              <input type="hidden" name="scheduleId" value={schedule.id} />
+              <label className="flex flex-col">
+                Drop a team (its seats stay empty; nobody moves)
+                <select name="teamId" required className={input}>
+                  <option value="">Pick a team…</option>
+                  {[...teams]
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <button className={button}>
+                Draft v{nextVersion} without this team
+              </button>
+            </form>
+          </div>
+        </Section>
+      )}
+
+      {isDraft && (
+        <form action={discardDraft} className="mb-4">
+          <input type="hidden" name="scheduleId" value={schedule.id} />
+          <button className={button}>Discard draft v{schedule.version}</button>
+        </form>
+      )}
 
       <p className="text-sm">
         <Link href="/organizer/schedules" className="underline">

@@ -184,6 +184,33 @@ export default async function GeneratePage({
           </table>
         </Section>
 
+        {published && (
+          <div
+            role="alert"
+            className="mb-4 max-w-3xl rounded border-2 border-red-600 p-3 text-sm"
+          >
+            <p className="font-semibold">
+              v{published.version} is published. Teams have screenshotted their
+              times.
+            </p>
+            <p className="my-1">
+              Regenerating re-packs everyone: most teams would get new times and
+              stations. For a team that arrived late or left, use{" "}
+              <a
+                href={`/organizer/schedules/${published.id}`}
+                className="underline"
+              >
+                late changes on v{published.version}
+              </a>{" "}
+              instead; they move nobody.
+            </p>
+            <label className="flex items-center gap-2 font-medium">
+              <input type="checkbox" name="regenerateAfterPublish" required />
+              Regenerate anyway: I accept that everyone&apos;s times may change.
+            </label>
+          </div>
+        )}
+
         <button className={button}>Generate draft v{nextVersion}</button>
       </form>
     </main>

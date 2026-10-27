@@ -31,7 +31,14 @@ export type ReviewInput = {
     slots: ReviewSlot[];
     stations: { id: string; label: string }[];
     assignments: ReviewAssignment[];
+    /** Names of the teams in it (for teams the new version dropped). */
+    teams?: { id: string; name: string }[];
   } | null;
+  /**
+   * A late-change draft copies one published version. If another version
+   * has been published since, publishing this would undo that change.
+   */
+  basedOnVersion?: number | null;
   /** The event's judging start (what unpublished team pages announce). */
   judgingStart?: { startsAt: string; timezone: string } | null;
 };
@@ -86,8 +93,8 @@ export type Review = {
   diff: {
     againstVersion: number;
     moved: { name: string; from: Placement[]; to: Placement[] }[];
-    added: string[];
-    removed: string[];
+    added: { name: string; to: Placement[] }[];
+    removed: { name: string; from: Placement[] }[];
   } | null;
   warnings: ReviewWarning[];
 };
@@ -123,6 +130,17 @@ export function reviewSchedule(input: ReviewInput): Review {
       invalid.push(`${t.name} sees one station twice.`);
     else if (mine[0].slotId === mine[1].slotId)
       invalid.push(`${t.name} is in two places at once.`);
+  }
+
+  if (
+    input.basedOnVersion != null &&
+    input.basedOnVersion !== input.published?.version
+  ) {
+    invalid.push(
+      `This late change was made to v${input.basedOnVersion}, but ${
+        input.published ? `v${input.published.version}` : "no version"
+      } is published now. Publishing it would undo whatever changed since; make the change again from the published version.`,
+    );
   }
 
   // Coverage: a team's tracks against the sponsors on the stations it visits.
@@ -273,8 +291,8 @@ export function reviewSchedule(input: ReviewInput): Review {
           diff.againstVersion +
           " times.",
         ...diff.moved.map((m) => `${m.name}: ${fmt(m.from)} -> ${fmt(m.to)}`),
-        ...diff.added.map((n) => `${n}: new`),
-        ...diff.removed.map((n) => `${n}: no longer scheduled`),
+        ...diff.added.map((a) => `${a.name}: new, ${fmt(a.to)}`),
+        ...diff.removed.map((r) => `${r.name}: no longer scheduled`),
       ],
     });
   }
@@ -350,19 +368,23 @@ function diffAgainst(
   };
   const now = placements(input.assignments, input.slots, input.stations);
   const before = placements(pub.assignments, pub.slots, pub.stations);
-  const name = new Map(input.teams.map((t) => [t.id, t.name]));
+  // Teams in either version: a dropped team isn't in input.teams.
+  const name = new Map(
+    [...(pub.teams ?? []), ...input.teams].map((t) => [t.id, t.name]),
+  );
   const key = (ps: Placement[]) =>
     ps.map((p) => `${p.stationId}@${p.startsAt}`).join("|");
   const moved: NonNullable<Review["diff"]>["moved"] = [];
-  const added: string[] = [];
-  const removed: string[] = [];
+  const added: NonNullable<Review["diff"]>["added"] = [];
+  const removed: NonNullable<Review["diff"]>["removed"] = [];
   for (const [teamId, to] of now) {
     const from = before.get(teamId);
-    if (!from) added.push(name.get(teamId) ?? teamId);
+    if (!from) added.push({ name: name.get(teamId) ?? teamId, to });
     else if (key(from) !== key(to))
       moved.push({ name: name.get(teamId) ?? teamId, from, to });
   }
-  for (const teamId of before.keys())
-    if (!now.has(teamId)) removed.push(name.get(teamId) ?? teamId);
+  for (const [teamId, from] of before)
+    if (!now.has(teamId))
+      removed.push({ name: name.get(teamId) ?? teamId, from });
   return { againstVersion: pub.version, moved, added, removed };
 }
