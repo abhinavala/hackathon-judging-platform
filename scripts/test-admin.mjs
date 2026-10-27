@@ -324,8 +324,22 @@ async function run() {
     "generate: after publishing, regenerating is refused without the acknowledgement",
     flash(r.url),
   );
+  const genDefaults = await get("/organizer/generate", org.cookie);
+  check(
+    genDefaults.html.includes('name="slotCount" min="1" value="17"') ||
+      /name="slotCount"[^>]*value="17"/.test(genDefaults.html),
+    "generate: suggests 17 slots, two above the minimum of 15",
+  );
+  check(
+    text(genDefaults.html).includes(
+      "16 empty seats: room for up to 8 late teams at no added time",
+    ),
+    "generate: and says why (spare seats for late teams)",
+  );
+  // The checks below expect the minimum, 15 slots: ask for it explicitly.
   r = await submit("/organizer/generate", org.cookie, "Generate draft", {
     regenerateAfterPublish: "on",
+    slotCount: "",
   });
   check(
     r.status === 303 &&
@@ -590,7 +604,12 @@ async function run() {
     "/organizer/generate",
     org.cookie,
     "Generate draft",
-    { mode: "keep", team: teamIds.slice(1), regenerateAfterPublish: "on" },
+    {
+      mode: "keep",
+      team: teamIds.slice(1),
+      regenerateAfterPublish: "on",
+      slotCount: "",
+    },
     { keepChecked: false },
   );
   check(

@@ -11,6 +11,9 @@ import { preflight } from "@/lib/scheduler";
 import { Flash, Section, button, input, table } from "../_ui/ui";
 import { generateDraft } from "./actions";
 
+/** Slots generated above the minimum, as seats for late teams. */
+const SLACK_SLOTS = 2;
+
 // Reads the organizer's session; blocks on the server rather than
 // prerendering (as the guard layout does).
 export const instant = false;
@@ -114,10 +117,23 @@ export default async function GeneratePage({
                 name="slotCount"
                 type="number"
                 min={1}
+                defaultValue={check.nSlots ? check.nSlots + SLACK_SLOTS : ""}
                 className={`${input} w-24`}
               />
             </label>
           </div>
+          {check.nSlots > 0 && (
+            <p className="mt-2 max-w-3xl text-sm">
+              Suggested: {check.nSlots + SLACK_SLOTS}, {SLACK_SLOTS} above the
+              minimum of {check.nSlots}. At the minimum every seat is full, so
+              the first late team adds two slots to the end, costing every judge{" "}
+              {2 * (event.slot_minutes ?? 7)} minutes. {SLACK_SLOTS} spare slots
+              give {SLACK_SLOTS * check.nPanels} empty seats: room for up to{" "}
+              {Math.floor((SLACK_SLOTS * check.nPanels) / 2)} late teams at no
+              added time, and slack for the timing drift that builds up over a
+              morning.
+            </p>
+          )}
         </Section>
 
         <Section title="Stations">

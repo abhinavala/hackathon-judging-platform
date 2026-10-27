@@ -230,6 +230,11 @@ diff against the version they replaced.
   can't be published, since publishing it would undo that change.
 - Generate, once a version is published, requires an explicit "regenerate
   anyway" acknowledgement and points to late changes instead.
+- **Generate with slack.** At the minimum slot count every seat is full
+  (60 teams on 8 stations: 15 slots, 120 seats), so the first late team adds
+  two slots and costs every judge 14 minutes. The generate screen defaults
+  to the minimum + 2 (17 slots, 16 spare seats: up to 8 late teams at no
+  added time, plus slack for timing drift). See the event-week runbook.
 
 All writes go through the service role, server-side, as with the seed.
 

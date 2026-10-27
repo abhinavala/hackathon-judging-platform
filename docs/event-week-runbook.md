@@ -24,6 +24,33 @@ second project isn't ready.
       `main` still deploy to production.
 - [ ] Undo both after the event (or once Preview has its own project).
 
+## Generate the real schedule with slack
+
+- [ ] **Generate with 2 slots above the minimum, not at it.** For 60 teams
+      on 8 stations the minimum is 15 slots, which is exactly full at 120
+      seats. The first late team then needs two new slots at the end,
+      costing every judge 14 minutes. 17 slots leave 16 empty seats: room
+      for up to 8 late arrivals at no added time, and slack for the per-slot
+      timing drift that builds up across a morning. The generate screen
+      suggests this by default; don't clear the field.
+- [ ] A team arrives late or leaves: open the **published** version and use
+      **Late changes** (add a late team / drop a team). Each drafts the next
+      version with only that change; review it and publish it. Never
+      regenerate after publishing: teams have screenshotted their times.
+
+## Rehearse late changes in the dry run
+
+These screens get used in a hurry at 10:15 when a team turns up late, so
+click through them on the Preview dry run before the event, in a real
+browser:
+
+- [ ] Add a late team to the published version, review the draft (the
+      banner names the seats; the diff shows 0 moved, 1 added), publish, and
+      open that team's `/t/<code>` page.
+- [ ] Drop a team, publish, and check its page says it isn't scheduled and
+      that the board shows its seats empty.
+- [ ] Discard an unwanted late-change draft.
+
 ## Keep the Supabase project awake
 
 Free-tier projects **pause after about a week without activity**, and a
