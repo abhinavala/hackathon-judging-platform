@@ -175,6 +175,20 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"rate_limits": {
+                  Row: {
+                    "hits": number,"key": string,"window_start": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "hits"?: number,"key": string,"window_start": string
+                  }
+                  Update: {
+                    "hits"?: number,"key"?: string,"window_start"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"schedules": {
                   Row: {
                     "event_id": string,"generated_at": string,"generated_by": string | null,"id": string,"published_at": string | null,"round": number,"stats": Json | null,"status": Database["public"]['Enums']["schedule_status"],"version": number
@@ -369,6 +383,9 @@ isOneToOne: false
                            },
 "publish_schedule":
 { Args: { "p_schedule_id": string }; Returns: undefined
+                           },
+"rate_limit_hit":
+{ Args: { "p_key": string,"p_max": number,"p_window_seconds": number }; Returns: boolean
                            },
 "team_schedule_by_code":
 { Args: { "p_code": string }; Returns: {

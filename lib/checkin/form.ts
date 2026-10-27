@@ -8,7 +8,7 @@
 import { normalizeEmail } from "../auth/email.ts";
 
 /** Including the captain. */
-export const MAX_TEAM_SIZE = 5;
+export const MAX_TEAM_SIZE = 6;
 export const TEAMMATE_ROWS = MAX_TEAM_SIZE - 1;
 const MAX_GITHUB = 5;
 

@@ -8,6 +8,7 @@ import { clockWithZone, dayLabel } from "@/lib/team/view";
 import { serviceClient } from "@/lib/supabase/service";
 import {
   parseCheckIn,
+  TEAMMATE_ROWS,
   type CheckInTrack,
   type FieldErrors,
   type FormFields,
@@ -162,7 +163,10 @@ export async function submitCheckIn(
           errors.captainEmail =
             "This address is already on a team that has checked in.";
         else if (i > 0) {
-          const row = [1, 2, 3, 4, 5].find(
+          const row = Array.from(
+            { length: TEAMMATE_ROWS },
+            (_, k) => k + 1,
+          ).find(
             (n) =>
               (fields[`teammateEmail${n}`] as string | undefined)
                 ?.trim()
