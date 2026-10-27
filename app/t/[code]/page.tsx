@@ -8,7 +8,11 @@ import { TeamViewClient } from "./team-view";
 // loads), then the client keeps it fresh. Blocks rather than prerendering.
 export const instant = false;
 
-export default async function TeamPage({ params }: PageProps<"/t/[code]">) {
+export default async function TeamPage({
+  params,
+  searchParams,
+}: PageProps<"/t/[code]">) {
+  const query = await searchParams;
   const raw = decodeURIComponent((await params).code);
   const code = normalizeCode(raw);
   if (!code)
@@ -29,6 +33,17 @@ export default async function TeamPage({ params }: PageProps<"/t/[code]">) {
       code={code}
       initial={loaded?.view ?? null}
       fetchedAt={loaded?.fetchedAt ?? null}
+      welcome={
+        // Just checked in (the check-in form redirects here). Cosmetic only:
+        // anyone can add these parameters, and nothing in them is private.
+        query.welcome === "1"
+          ? {
+              receiptSent: query.receipt === "sent",
+              invited: Number(query.invited) || 0,
+              inviteFailures: Number(query.inviteFailures) || 0,
+            }
+          : null
+      }
     />
   );
 }

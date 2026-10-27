@@ -74,6 +74,34 @@ The join code on screen is what keeps them unblocked in the meantime.
 
 ---
 
+### As built (Phase 2)
+
+- `/checkin` is public. The form posts to `/checkin/submit`, a route handler
+  rather than a server action, so it works both ways: with JavaScript an
+  error keeps everything typed and is shown by field; without it the
+  browser gets a 303 to the team page or back to the form with the message.
+- The write is `check_in_team(payload)` (migration 0008), granted to the
+  service role only: team, members and tracks in one transaction. It takes
+  a per-event advisory lock first, because `enforce_one_team_per_event`
+  can't see another transaction's uncommitted rows, so two teammates
+  submitting at the same moment would otherwise both get through. It then
+  names every address already on a team, surfaced as "someone on your team
+  has already checked in". A team name already checked in (any case) is
+  refused by field.
+- Success redirects to `/t/<join code>` with the code shown large, plus what
+  was emailed. No member addresses are ever shown there.
+- Then a link is minted per person (creating their accounts, which links
+  `team_members.user_id`) and sent as one batch: the captain gets the
+  relay's `checkin` receipt, teammates get `invite` ("Riley added you to
+  Night Owls"). A send failure is reported on the page; the check-in
+  stands.
+- Limits: up to 5 people per team (`MAX_TEAM_SIZE`), any email domain, and
+  a hidden field for bots. Before `checkin_opens_at` the form isn't shown;
+  after `checkin_closes_at` it still accepts check-ins and tells the team
+  to find an organizer, since the schedule may be set.
+- Not built yet: correcting a teammate's typo'd email and re-sending from
+  the team page, and the organizer flag for a bounced captain email.
+
 ## Two sensitivity tiers
 
 | Data | Access |

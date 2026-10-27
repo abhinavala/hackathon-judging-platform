@@ -1378,6 +1378,243 @@ async function run() {
     JSON.stringify(refill?.stats.lateChange),
   );
 
+  // 13. Web check-in (Phase 2): public, written by the service role through
+  // check_in_team(), join code on screen at once.
+  const { data: awsTrack13 } = await db
+    .from("tracks")
+    .select("id, name")
+    .eq("sponsor", "AWS")
+    .limit(1)
+    .single();
+  const checkinForm = (over = {}) => {
+    const fd = new FormData();
+    const base = {
+      teamName: "Night Owls",
+      captainName: "Riley Park",
+      captainEmail: "riley.park@scu.example",
+      teammateName1: "Sam Ortiz",
+      teammateEmail1: "sam.ortiz@scu.example",
+      teammateEmail2: "jo.lee@scu.example",
+      devpostUrl: "https://devpost.com/software/night-owls",
+      githubUrls: "github.com/owls/app",
+      hasGradStudent: "no",
+      allFreshmen: "yes",
+      halfOrMoreNonMale: "yes",
+      website: "",
+      ...over,
+    };
+    for (const [k, v] of Object.entries(base))
+      for (const x of [v].flat()) fd.append(k, x);
+    if (!("track" in over)) fd.append("track", awsTrack13.id);
+    return fd;
+  };
+  const postCheckin = (fd, json) =>
+    fetch(`${BASE}/checkin/submit`, {
+      method: "POST",
+      body: fd,
+      redirect: "manual",
+      headers: json ? { accept: "application/json" } : {},
+    });
+
+  let ci = visible((await get("/checkin")).html);
+  check(
+    (await get("/checkin")).status === 200 &&
+      ci.includes("Check-in opens at 9:00 AM") &&
+      !ci.includes("Team name"),
+    "check-in: before it opens, the page says when, and shows no form",
+  );
+  let res13 = await postCheckin(checkinForm(), true);
+  check(
+    res13.status === 422 &&
+      (await res13.json()).errors.form.startsWith("Check-in opens at"),
+    "check-in: and a submission before it opens is refused",
+  );
+  const { data: window13 } = await db
+    .from("events")
+    .select("checkin_opens_at, checkin_closes_at")
+    .eq("id", ev.id)
+    .single();
+  await db
+    .from("events")
+    .update({
+      checkin_opens_at: new Date(Date.now() - 3600_000).toISOString(),
+      checkin_closes_at: new Date(Date.now() + 3600_000).toISOString(),
+    })
+    .eq("id", ev.id);
+  ci = visible((await get("/checkin")).html);
+  check(
+    ci.includes("Check in your team") &&
+      ci.includes(awsTrack13.name) &&
+      ci.includes("Teammate 4: email") &&
+      !ci.includes("Teammate 5"),
+    "check-in: the public form lists the event's tracks and up to 4 teammates",
+  );
+
+  const { count: teamsBefore13 } = await db
+    .from("teams")
+    .select("*", { count: "exact", head: true });
+  res13 = await postCheckin(
+    checkinForm({ teamName: "", captainEmail: "nope", hasGradStudent: "" }),
+    true,
+  );
+  let body13 = await res13.json();
+  check(
+    res13.status === 422 &&
+      body13.errors.teamName &&
+      body13.errors.captainEmail &&
+      body13.errors.hasGradStudent,
+    "check-in: field errors come back together, by field (JavaScript path)",
+    JSON.stringify(body13.errors),
+  );
+  res13 = await postCheckin(checkinForm({ teamName: "" }), false);
+  check(
+    res13.status === 303 &&
+      res13.headers.get("location").startsWith("/checkin?error=") &&
+      visible((await get(res13.headers.get("location"))).html).includes(
+        "Enter your team",
+      ),
+    "check-in: without JavaScript, an error returns to the form with the message",
+    res13.headers.get("location"),
+  );
+  res13 = await postCheckin(
+    checkinForm({ website: "http://spam.example" }),
+    true,
+  );
+  check(
+    res13.status === 422,
+    "check-in: the hidden bot field refuses the submission",
+  );
+  const { count: teamsAfterErrors } = await db
+    .from("teams")
+    .select("*", { count: "exact", head: true });
+  check(teamsAfterErrors === teamsBefore13, "check-in: and nothing was written");
+
+  // The real thing, without JavaScript.
+  res13 = await postCheckin(checkinForm(), false);
+  const welcome = res13.headers.get("location") ?? "";
+  const newCode = /^\/t\/([A-Z0-9]{4}-[A-Z0-9]{4})\?/.exec(welcome)?.[1];
+  check(
+    res13.status === 303 && !!newCode && welcome.includes("welcome=1"),
+    "check-in: success redirects straight to the team page by join code",
+    welcome,
+  );
+  const welcomePage = visible((await get(welcome)).html);
+  check(
+    welcomePage.includes("You're checked in.") &&
+      welcomePage.includes(newCode) &&
+      welcomePage.includes("Screenshot this."),
+    "check-in: the join code is on screen at once",
+  );
+  check(
+    welcomePage.includes(
+      "We couldn't email you a receipt right now. Your check-in is saved",
+    ) && !welcomePage.includes("riley.park"),
+    "check-in: with no working sender it says so, the check-in stands, and no address is shown",
+  );
+  const { data: owls } = await db
+    .from("teams")
+    .select(
+      "id, name, checked_in_at, contact_email, devpost_url, github_urls, all_freshmen, team_members(email, is_captain, user_id, full_name), team_tracks(track_id)",
+    )
+    .eq("join_code", newCode)
+    .single();
+  check(
+    owls?.name === "Night Owls" &&
+      owls.checked_in_at &&
+      owls.contact_email === "riley.park@scu.example" &&
+      owls.devpost_url === "https://devpost.com/software/night-owls" &&
+      owls.github_urls[0] === "https://github.com/owls/app" &&
+      owls.all_freshmen === true &&
+      owls.team_members.length === 3 &&
+      owls.team_members.filter((m) => m.is_captain).map((m) => m.email)[0] ===
+        "riley.park@scu.example" &&
+      owls.team_tracks.length === 1,
+    "check-in: team, members, captain, tracks and links are all written",
+    JSON.stringify(owls),
+  );
+  check(
+    owls?.team_members.every((m) => m.user_id),
+    "check-in: a link was minted per person, creating their accounts and linking them to the team",
+  );
+
+  // Double check-in, by a teammate.
+  res13 = await postCheckin(
+    checkinForm({
+      teamName: "Owls Again",
+      captainName: "Sam Ortiz",
+      captainEmail: "SAM.ORTIZ@scu.example",
+      teammateName1: "",
+      teammateEmail1: "new.person@scu.example",
+      teammateEmail2: "",
+    }),
+    true,
+  );
+  body13 = await res13.json();
+  check(
+    res13.status === 422 &&
+      body13.errors.form.startsWith(
+        "Someone on your team has already checked in (sam.ortiz@scu.example is already on a checked-in team)",
+      ) &&
+      body13.errors.captainEmail,
+    "check-in: a second check-in by a teammate says someone on your team has already checked in",
+    JSON.stringify(body13.errors),
+  );
+  res13 = await postCheckin(
+    checkinForm({
+      teamName: "night owls",
+      captainEmail: "someone.else@scu.example",
+      teammateEmail1: "",
+      teammateEmail2: "",
+      teammateName1: "",
+    }),
+    true,
+  );
+  body13 = await res13.json();
+  check(
+    res13.status === 422 &&
+      /A team called "night owls" has already checked in/.test(
+        body13.errors.teamName,
+      ),
+    "check-in: a team name already checked in (any case) is refused, by field",
+  );
+
+  // Two teammates submitting at the same moment: exactly one succeeds.
+  const race = await Promise.all(
+    ["Race A", "Race B"].map((name, i) =>
+      postCheckin(
+        checkinForm({
+          teamName: name,
+          captainName: `Racer ${i}`,
+          captainEmail: `racer${i}@scu.example`,
+          teammateName1: "",
+          teammateEmail1: "shared.teammate@scu.example",
+          teammateEmail2: "",
+        }),
+        true,
+      ),
+    ),
+  );
+  check(
+    race
+      .map((r) => r.status)
+      .sort()
+      .join() === "200,422",
+    "check-in: two teammates at the same moment, one check-in wins (no double team)",
+    race.map((r) => r.status).join(),
+  );
+
+  // The write path is the service role's alone.
+  const { error: anonCall } = await createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  ).rpc("check_in_team", { p: { event_id: ev.id } });
+  check(
+    /permission denied/.test(anonCall?.message ?? ""),
+    "check-in: check_in_team can't be called anonymously (RLS isn't loosened; only the service role writes)",
+    anonCall?.message,
+  );
+  await db.from("events").update(window13).eq("id", ev.id);
+
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 }
 

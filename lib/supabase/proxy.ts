@@ -18,6 +18,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 const PUBLIC_EXACT = ["/"];
 const PUBLIC_PREFIXES = [
   "/login",
+  // Phase 2: the check-in form is for people with no account yet.
+  "/checkin",
   "/auth/callback",
   "/auth/signout",
   // Phase 4: deliberately anonymous. The team view by join code (and its

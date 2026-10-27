@@ -56,10 +56,16 @@ export function TeamViewClient({
   code,
   initial,
   fetchedAt: initialFetchedAt,
+  welcome = null,
 }: {
   code: string;
   initial: TeamView | null;
   fetchedAt: number | null;
+  welcome?: {
+    receiptSent: boolean;
+    invited: number;
+    inviteFailures: number;
+  } | null;
 }) {
   const [live, setLive] = useState<Saved | null>(
     initial && initialFetchedAt !== null
@@ -148,6 +154,7 @@ export function TeamViewClient({
 
   return (
     <Shell>
+      {welcome && <Welcome code={code} {...welcome} />}
       {stale && (
         <div
           role="alert"
@@ -337,6 +344,53 @@ export function TeamViewClient({
         </footer>
       )}
     </Shell>
+  );
+}
+
+/**
+ * Straight after check-in: the join code, large enough to screenshot, and
+ * what was emailed. Shown before anything else, because the email may never
+ * arrive and the code works without it.
+ */
+function Welcome({
+  code,
+  receiptSent,
+  invited,
+  inviteFailures,
+}: {
+  code: string;
+  receiptSent: boolean;
+  invited: number;
+  inviteFailures: number;
+}) {
+  const invitedOk = invited - inviteFailures;
+  return (
+    <section
+      role="status"
+      className="mb-8 rounded-lg border-4 border-green-700 p-4"
+    >
+      <p className="text-2xl font-bold">You&apos;re checked in.</p>
+      <p className="mt-3 text-lg">Your team&apos;s join code:</p>
+      <p className="font-mono text-5xl font-extrabold tracking-wider">{code}</p>
+      <p className="mt-2">
+        Screenshot this. The code opens this page, with your judging times, on
+        any phone, no sign-in needed.
+      </p>
+      <ul className="mt-3 list-disc space-y-1 pl-5">
+        <li>
+          {receiptSent
+            ? "We emailed you a receipt and a sign-in link."
+            : "We couldn't email you a receipt right now. Your check-in is saved; the code above is all you need."}
+        </li>
+        {invited > 0 && (
+          <li>
+            {inviteFailures === 0
+              ? `We emailed ${invited} teammate${invited === 1 ? "" : "s"} an invitation to join.`
+              : `${invitedOk} of ${invited} teammate invitations went out. Share the code with the others.`}
+          </li>
+        )}
+      </ul>
+    </section>
   );
 }
 
