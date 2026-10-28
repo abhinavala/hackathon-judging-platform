@@ -33,19 +33,6 @@ export async function mintSignInLink(email: string): Promise<string> {
   });
   if (error) throw error;
 
-  // handle_new_user() links team_members rows by email, but only when it
-  // creates the account. For an address that already had one (signed in
-  // before, added to a team later, a corrected typo), link it here the same
-  // way: only rows not yet linked to anyone. (Judges are left to the roster
-  // flow, which also sets their role.)
-  const { error: linkError } = await admin
-    .from("team_members")
-    .update({ user_id: data.user.id })
-    .is("user_id", null)
-    .ilike("email", email.replace(/[\\%_]/g, "\\$&"));
-  if (linkError)
-    throw new Error(`linking team membership: ${linkError.message}`);
-
   const { hashed_token, verification_type } = data.properties;
   return callbackLink(siteUrl(), hashed_token, verification_type, email);
 }
