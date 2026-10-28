@@ -117,10 +117,12 @@ The join code on screen is what keeps them unblocked in the meantime.
   Invitations are limited to 12 an hour per team and 3 an hour per address:
   check-in itself can only reach an address once per event, so resends are
   the one way to mail someone repeatedly.
-- Minting a link also links the address's `team_members` row when the
-  account already existed. `handle_new_user()` only does this when it
-  creates the account, so a captain or teammate who had signed in before
-  would otherwise never be linked to their team.
+- Linking is done by the database, for every insert path (check-in, the
+  CSV importer, the teammates page): `handle_new_user()` links roster rows
+  when an account is created, and `link_member_to_existing_user()` (0003, a
+  BEFORE INSERT / UPDATE OF email trigger) links a row to an account that
+  already exists. Correcting an address on the teammates page sets
+  `user_id` to null with the new email, so the same trigger relinks it.
 - Not built, by decision: an organizer flag for a bounced captain email.
   Apps Script can't see bounces, and the captain is standing at the
   check-in desk; if no receipt arrives, they'll say so.
@@ -197,7 +199,7 @@ resumable rather than ambiguous.
 | **Two teammates both check in** | `enforce_one_team_per_event` already blocks it at the database. Surface it as *"someone on your team has already checked in"*, never a raw constraint violation. |
 | **Captain's email bounces** | That's why the captain gets a receipt, not just a link. No automated flag (Apps Script can't see bounces): the captain is at the desk and will say if nothing arrived. |
 | **Teammate email typo'd** | Invite never arrives. The captain corrects it and re-sends from `/team/members`. |
-| **Person already has an account** | `generateLink` signs them in rather than duplicating, and minting links their roster row (the trigger only does that for new accounts). |
+| **Person already has an account** | `generateLink` signs them in rather than duplicating; the 0003 trigger links their roster row on insert. |
 | **Apps Script throttled or broken** | Keep an SMTP provider configured on the hosted project as a fallback route, so recovery isn't a code change at 9:30am. |
 | **Nobody's email works** | Join code, shown on screen at check-in and reprintable by organizers. |
 | **Session lapsed before the schedule send** | Most people still hold a live session from check-in (refresh token persists), so later emails are notifications, not fresh logins. |
