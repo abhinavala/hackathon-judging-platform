@@ -14,7 +14,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 
-const EXPECTED = 31;
+const EXPECTED = 39;
 // RLS_TEST_FILE lets you point the runner at another file (e.g. to check that
 // a failing assertion really fails the run).
 const TEST_FILE = process.env.RLS_TEST_FILE ?? "supabase/tests/rls_test.sql";

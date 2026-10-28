@@ -1776,6 +1776,23 @@ async function run() {
     "teammates page: a teammate posting the captain's form directly is refused",
     asSam.headers.get("location"),
   );
+  // And going around the app entirely: the same teammate's session, straight
+  // at the database API.
+  const { error: bypassAdd } = await sam.client
+    .from("team_members")
+    .insert({ team_id: owls.id, email: "smuggled@scu.example" });
+  const { data: bypassEdit } = await sam.client
+    .from("team_members")
+    .update({ email: "hijacked@scu.example" })
+    .eq("team_id", owls.id)
+    .eq("email", "riley.park@scu.example")
+    .select();
+  check(
+    /row-level security/.test(bypassAdd?.message ?? "") &&
+      bypassEdit?.length === 0,
+    "teammates: a teammate calling the database API directly can't add or edit members (0010)",
+    bypassAdd?.message,
+  );
 
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 }

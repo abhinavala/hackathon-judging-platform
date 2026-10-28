@@ -359,5 +359,86 @@ begin
   perform test_assert(n = 1, '0003: that teammate can now see their team');
   reset role;
 end $$;
+-- =============================================================================
+-- 0010. ONLY THE CAPTAIN (OR AN ORGANIZER) CHANGES WHO IS ON A TEAM
+-- =============================================================================
+do $$
+declare
+  n  int;
+  ok boolean;
+  alpha constant uuid := 'a0000000-0000-0000-0000-000000000001';
+  bravo constant uuid := 'a0000000-0000-0000-0000-000000000002';
+begin
+  -- A plain (non-captain) member of Team Alpha.
+  insert into auth.users (id, email)
+  values ('88888888-8888-8888-8888-888888888888', 'teammate.a@scu.edu');
+  insert into public.team_members (team_id, email)
+  values (alpha, 'teammate.a@scu.edu');
+
+  perform become('88888888-8888-8888-8888-888888888888');
+  begin
+    insert into public.team_members (team_id, email) values (alpha, 'stranger@example.com');
+    ok := false;
+  exception when insufficient_privilege then ok := true;
+  end;
+  perform test_assert(ok, '0010: a teammate cannot add a member to their team');
+
+  update public.team_members set email = 'hijack@example.com'
+   where team_id = alpha and email = 'captain.a@scu.edu';
+  get diagnostics n = row_count;
+  perform test_assert(n = 0, '0010: a teammate cannot edit another member''s email');
+
+  update public.team_members set is_captain = true
+   where team_id = alpha and email = 'teammate.a@scu.edu';
+  get diagnostics n = row_count;
+  perform test_assert(n = 0, '0010: a teammate cannot make themselves captain');
+
+  delete from public.team_members where team_id = alpha and email = 'late.member@scu.edu';
+  get diagnostics n = row_count;
+  perform test_assert(n = 0, '0010: a teammate cannot remove a member');
+  reset role;
+
+  select count(*) into n from public.team_members
+   where team_id = alpha
+     and ((email = 'captain.a@scu.edu' and is_captain)
+       or email = 'late.member@scu.edu'
+       or (email = 'teammate.a@scu.edu' and not is_captain));
+  perform test_assert(n = 3, '0010: and the roster is exactly as it was');
+
+  -- The captain can add, edit and remove members of their own team ...
+  perform become('11111111-1111-1111-1111-111111111111');
+  insert into public.team_members (team_id, email) values (alpha, 'added@scu.edu');
+  update public.team_members set email = 'corrected@scu.edu'
+   where team_id = alpha and email = 'added@scu.edu';
+  get diagnostics n = row_count;
+  ok := n = 1;
+  delete from public.team_members where team_id = alpha and email = 'corrected@scu.edu';
+  get diagnostics n = row_count;
+  perform test_assert(ok and n = 1, '0010: the captain can add, edit and remove members');
+
+  -- ... but not another team's.
+  begin
+    insert into public.team_members (team_id, email) values (bravo, 'smuggled@scu.edu');
+    ok := false;
+  exception when insufficient_privilege then ok := true;
+  end;
+  update public.team_members set email = 'hijack@example.com' where team_id = bravo;
+  get diagnostics n = row_count;
+  perform test_assert(ok and n = 0, '0010: a captain cannot change another team''s members');
+  reset role;
+
+  -- An organizer can change any team.
+  perform become('55555555-5555-5555-5555-555555555555');
+  insert into public.team_members (team_id, email) values (bravo, 'org.added@scu.edu');
+  update public.team_members set full_name = 'Added by organizer'
+   where team_id = bravo and email = 'org.added@scu.edu';
+  get diagnostics n = row_count;
+  ok := n = 1;
+  delete from public.team_members where team_id = bravo and email = 'org.added@scu.edu';
+  get diagnostics n = row_count;
+  perform test_assert(ok and n = 1, '0010: an organizer can add, edit and remove members of any team');
+  reset role;
+end $$;
+
 \echo ''
 \echo '================= ALL PHASE 1 ACCEPTANCE TESTS PASSED ================='
