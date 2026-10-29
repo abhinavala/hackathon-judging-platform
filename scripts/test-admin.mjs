@@ -1793,6 +1793,45 @@ async function run() {
     "teammates: a teammate calling the database API directly can't add or edit members (0010)",
     bypassAdd?.message,
   );
+  const { data: a10Track } = await db
+    .from("tracks")
+    .select("id")
+    .eq("sponsor", "A10")
+    .limit(1)
+    .single();
+  const { error: bypassTrack } = await sam.client
+    .from("team_tracks")
+    .insert({ team_id: owls.id, track_id: a10Track.id });
+  const { data: bypassDrop } = await sam.client
+    .from("team_tracks")
+    .delete()
+    .eq("team_id", owls.id)
+    .select();
+  const { data: bypassRename } = await sam.client
+    .from("teams")
+    .update({ name: "Renamed by Sam" })
+    .eq("id", owls.id)
+    .select();
+  const { error: bypassCreate } = await sam.client.from("teams").insert({
+    event_id: ev.id,
+    name: "Sam's own team",
+    join_code: "SAMS-0001",
+    created_by: sam.userId,
+  });
+  const { data: owlsAfter } = await db
+    .from("teams")
+    .select("name, team_tracks(track_id)")
+    .eq("id", owls.id)
+    .single();
+  check(
+    /row-level security/.test(bypassTrack?.message ?? "") &&
+      bypassDrop?.length === 0 &&
+      bypassRename?.length === 0 &&
+      /row-level security/.test(bypassCreate?.message ?? "") &&
+      owlsAfter.name === "Night Owls" &&
+      owlsAfter.team_tracks.length === 1,
+    "teammates: through the API a teammate can't change tracks or details, or create a team (0011)",
+  );
 
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 }
