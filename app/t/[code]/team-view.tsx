@@ -346,7 +346,10 @@ export function TeamViewClient({
           </p>
           <p suppressHydrationWarning>
             Join code {code} · updated {ago(fetchedAt, serverNow)} · all times{" "}
-            {clockWithZone(serverNow, tz).split(" ").pop()}
+            {/* The zone on the schedule's day, not today's: PDT and PST differ. */}
+            {clockWithZone(view.slots[0]?.startsAt ?? serverNow, tz)
+              .split(" ")
+              .pop()}
           </p>
         </footer>
       )}

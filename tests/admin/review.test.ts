@@ -202,6 +202,16 @@ test("a dropped team is named in the diff, with the seats it gave up", () => {
   assert.ok(w.detail.includes("Team 6: no longer scheduled"));
 });
 
+test("a draft older than the published version can't be published", () => {
+  const old = reviewSchedule({ ...eventInput(), supersededBy: 4 });
+  assert.equal(old.invalid.length, 1);
+  assert.match(old.invalid[0], /older than the published v4/);
+  assert.deepEqual(
+    reviewSchedule({ ...eventInput(), supersededBy: null }).invalid,
+    [],
+  );
+});
+
 test("a late change drafted against an older version can't be published", () => {
   const input = eventInput();
   const pub = {

@@ -15,6 +15,7 @@ export default async function SchedulesPage({
   const event = await currentEvent(db);
   if (!event) return <p>No event exists yet.</p>;
   const schedules = await loadSchedules(db, event.id);
+  const live = schedules.find((s) => s.status === "published");
   const when = (iso: string | null) =>
     iso
       ? `${new Date(iso).toLocaleDateString("en-US", { timeZone: event.timezone, month: "short", day: "numeric" })} ${clock(iso, event.timezone)}`
@@ -45,26 +46,47 @@ export default async function SchedulesPage({
               </tr>
             </thead>
             <tbody>
-              {schedules.map((s) => (
-                <tr key={s.id}>
-                  <td>v{s.version}</td>
-                  <td
-                    className={s.status === "published" ? "font-semibold" : ""}
-                  >
-                    {s.status}
-                  </td>
-                  <td>{when(s.generated_at)}</td>
-                  <td>{when(s.published_at)}</td>
-                  <td>
-                    <Link
-                      href={`/organizer/schedules/${s.id}`}
-                      className="underline"
+              {schedules.map((s) => {
+                const superseded =
+                  s.status === "draft" && live && s.version < live.version;
+                return (
+                  <tr key={s.id}>
+                    <td>v{s.version}</td>
+                    <td
+                      className={
+                        s.status === "published" ? "font-semibold" : ""
+                      }
                     >
-                      {s.status === "draft" ? "Review and publish" : "View"}
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+                      {superseded
+                        ? `draft, superseded by v${live.version}`
+                        : s.status}
+                    </td>
+                    <td>{when(s.generated_at)}</td>
+                    <td>{when(s.published_at)}</td>
+                    <td>
+                      <Link
+                        href={`/organizer/schedules/${s.id}`}
+                        className="underline"
+                      >
+                        {s.status === "draft" && !superseded
+                          ? "Review and publish"
+                          : "View"}
+                      </Link>
+                      {s.status === "published" && (
+                        <>
+                          {" · "}
+                          <Link
+                            href={`/organizer/schedules/${s.id}#late-changes`}
+                            className="font-semibold underline"
+                          >
+                            Late team or dropped team
+                          </Link>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

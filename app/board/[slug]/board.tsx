@@ -227,7 +227,8 @@ export function BoardClient({
         </p>
         {view.found && view.published && (
           <p>
-            Schedule v{view.published.version} · times {tzName(serverNow, tz)}
+            Schedule v{view.published.version} · times{" "}
+            {tzName(view.slots[0]?.startsAt ?? serverNow, tz)}
           </p>
         )}
       </footer>
@@ -235,8 +236,9 @@ export function BoardClient({
   );
 }
 
-function tzName(now: number, tz: string) {
-  return clockWithZone(now, tz).split(" ").pop();
+/** The zone on the schedule's day ("PST"), not today's. */
+function tzName(at: number | string, tz: string) {
+  return clockWithZone(at, tz).split(" ").pop();
 }
 
 function SlotHeading({

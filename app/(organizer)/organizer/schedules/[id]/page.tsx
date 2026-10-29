@@ -164,6 +164,59 @@ export default async function SchedulePage({
         </p>
       )}
 
+      {schedule.status === "published" && (
+        // First thing on the published version: a team turning up at 10:15
+        // is why an organizer opens this page on the day.
+        <div id="late-changes">
+          <Section title="Late changes">
+            <p className="mb-2 max-w-3xl text-sm">
+              Teams have screenshotted these times, so nothing here re-runs the
+              generator. Each change drafts v{nextVersion}: a copy of this
+              version with only that change, for you to review and publish.
+            </p>
+            <div className="flex flex-wrap gap-8">
+              <form action={addLateTeam} className="space-y-1 text-sm">
+                <input type="hidden" name="scheduleId" value={schedule.id} />
+                <label className="flex flex-col">
+                  Add a late team (seats in free slots, or at the end)
+                  <select name="teamId" required className={input}>
+                    <option value="">Pick a team…</option>
+                    {unscheduled.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                        {t.checkedIn ? "" : " (not checked in)"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className={button}>
+                  Draft v{nextVersion} with this team
+                </button>
+              </form>
+              <form action={dropTeam} className="space-y-1 text-sm">
+                <input type="hidden" name="scheduleId" value={schedule.id} />
+                <label className="flex flex-col">
+                  Drop a team (its seats stay empty; nobody moves)
+                  <select name="teamId" required className={input}>
+                    <option value="">Pick a team…</option>
+                    {[...teams]
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <button className={button}>
+                  Draft v{nextVersion} without this team
+                </button>
+              </form>
+            </div>
+          </Section>
+        </div>
+      )}
+
       <Section title="Coverage">
         <p className="text-sm">
           {review.coverage.fullyCovered}/{review.coverage.teams} teams fully
@@ -382,55 +435,6 @@ export default async function SchedulePage({
           </table>
         </div>
       </Section>
-
-      {schedule.status === "published" && (
-        <Section title="Late changes">
-          <p className="mb-2 max-w-3xl text-sm">
-            Teams have screenshotted these times, so nothing here re-runs the
-            generator. Each change drafts v{nextVersion}: a copy of this version
-            with only that change, for you to review and publish.
-          </p>
-          <div className="flex flex-wrap gap-8">
-            <form action={addLateTeam} className="space-y-1 text-sm">
-              <input type="hidden" name="scheduleId" value={schedule.id} />
-              <label className="flex flex-col">
-                Add a late team (seats in free slots, or at the end)
-                <select name="teamId" required className={input}>
-                  <option value="">Pick a team…</option>
-                  {unscheduled.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                      {t.checkedIn ? "" : " (not checked in)"}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button className={button}>
-                Draft v{nextVersion} with this team
-              </button>
-            </form>
-            <form action={dropTeam} className="space-y-1 text-sm">
-              <input type="hidden" name="scheduleId" value={schedule.id} />
-              <label className="flex flex-col">
-                Drop a team (its seats stay empty; nobody moves)
-                <select name="teamId" required className={input}>
-                  <option value="">Pick a team…</option>
-                  {[...teams]
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <button className={button}>
-                Draft v{nextVersion} without this team
-              </button>
-            </form>
-          </div>
-        </Section>
-      )}
 
       {isDraft && (
         <form action={discardDraft} className="mb-4">

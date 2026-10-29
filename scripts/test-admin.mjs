@@ -1299,6 +1299,29 @@ async function run() {
     "late team: once published, the version still shows its diff against v3",
   );
 
+  // The seed's v2 draft predates the published late change: it's marked
+  // superseded and can't be published (it would undo the change).
+  const { data: seedDraft } = await db
+    .from("schedules")
+    .select("id")
+    .eq("version", 2)
+    .single();
+  const list12 = text((await get("/organizer/schedules", org.cookie)).html);
+  r = await publishDraft(`/organizer/schedules/${seedDraft.id}`);
+  check(
+    list12.includes("draft, superseded by v") &&
+      list12.includes("Late team or dropped team") &&
+      /structural errors/.test(flash(r.url)),
+    "superseded draft: an older draft is marked superseded and can't be published",
+    flash(r.url),
+  );
+  const pub12 = (await get(insertPath, org.cookie)).html;
+  check(
+    pub12.indexOf('id="late-changes"') > 0 &&
+      pub12.indexOf('id="late-changes"') < pub12.indexOf(">Coverage<"),
+    "late changes: on the published version they come first, above the review",
+  );
+
   // Drop a team from the new published version.
   r = await submit(insertPath, org.cookie, "without this team", {
     teamId: tv.id,

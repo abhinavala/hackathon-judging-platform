@@ -39,6 +39,12 @@ export type ReviewInput = {
    * has been published since, publishing this would undo that change.
    */
   basedOnVersion?: number | null;
+  /**
+   * Set on a draft older than the published version: it was made before
+   * the late changes (or regeneration) since, and publishing it would undo
+   * them.
+   */
+  supersededBy?: number | null;
   /** The event's judging start (what unpublished team pages announce). */
   judgingStart?: { startsAt: string; timezone: string } | null;
 };
@@ -140,6 +146,12 @@ export function reviewSchedule(input: ReviewInput): Review {
       `This late change was made to v${input.basedOnVersion}, but ${
         input.published ? `v${input.published.version}` : "no version"
       } is published now. Publishing it would undo whatever changed since; make the change again from the published version.`,
+    );
+  }
+
+  if (input.supersededBy != null) {
+    invalid.push(
+      `This draft is older than the published v${input.supersededBy}, so publishing it would undo every change since. Make the change again from v${input.supersededBy}, or generate a new draft.`,
     );
   }
 

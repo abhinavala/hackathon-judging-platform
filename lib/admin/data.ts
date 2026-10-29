@@ -360,6 +360,12 @@ export async function loadScheduleView(
         .filter((t) => t.checkedIn && !scheduled.has(t.id))
         .map((t) => ({ id: t.id, name: t.name })),
       basedOnVersion: schedule.stats?.basedOn?.version ?? null,
+      supersededBy:
+        schedule.status === "draft" &&
+        published &&
+        schedule.version < published.version
+          ? published.version
+          : null,
       published:
         compareTo && publishedContents
           ? {

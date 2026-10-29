@@ -35,7 +35,9 @@ export async function loadMyTeam(
   const db = await createClient();
   const { data: team, error } = await db
     .from("teams")
-    .select("id, name, join_code, team_members(email, full_name, is_captain, user_id)")
+    .select(
+      "id, name, join_code, team_members(email, full_name, is_captain, user_id)",
+    )
     .eq("id", teamId)
     .maybeSingle();
   if (error) throw new Error(`team: ${error.message}`);
@@ -61,7 +63,8 @@ export async function loadMyTeam(
   );
   members.sort(
     (a, b) =>
-      Number(b.isCaptain) - Number(a.isCaptain) || a.email.localeCompare(b.email),
+      Number(b.isCaptain) - Number(a.isCaptain) ||
+      a.email.localeCompare(b.email),
   );
   return {
     id: team.id,
@@ -84,8 +87,14 @@ export async function deleteUnusedAccount(userId: string): Promise<void> {
   const { data } = await admin.auth.admin.getUserById(userId);
   if (!data.user || data.user.last_sign_in_at) return;
   const [{ count: memberships }, { count: judging }] = await Promise.all([
-    admin.from("team_members").select("*", { count: "exact", head: true }).eq("user_id", userId),
-    admin.from("judges").select("*", { count: "exact", head: true }).eq("user_id", userId),
+    admin
+      .from("team_members")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId),
+    admin
+      .from("judges")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId),
   ]);
   if ((memberships ?? 0) > 0 || (judging ?? 0) > 0) return;
   await admin.auth.admin.deleteUser(userId);

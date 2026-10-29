@@ -11,7 +11,7 @@ export function Flash({
   return (
     <p
       role={error ? "alert" : "status"}
-      className={`mb-4 rounded border px-3 py-2 text-sm ${error ? "border-red-600 text-red-700" : "border-green-700 text-green-800"}`}
+      className={`mb-4 rounded border px-3 py-2 text-sm ${error ? "border-red-600 text-red-700 dark:text-red-400" : "border-green-700 text-green-800 dark:text-green-400"}`}
     >
       {error ?? ok}
     </p>
