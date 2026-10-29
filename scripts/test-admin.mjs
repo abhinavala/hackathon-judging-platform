@@ -1350,6 +1350,35 @@ async function run() {
     "drop: its assignments are cancelled, nothing is re-packed, nobody else moves",
   );
 
+  // Warnings identical to the published version's are already accepted and
+  // shown without a tick box; changed or new ones still need one.
+  const dropHtml = (await get(dropPath, org.cookie)).html;
+  const dropAcks = [...dropHtml.matchAll(/name="(ack:[\w-]+)"/g)].map(
+    (m) => m[1],
+  );
+  check(
+    text(dropHtml).includes("Already accepted in v") &&
+      !dropAcks.includes("ack:tight-spacing") &&
+      dropAcks.includes("ack:unfilled-slots") &&
+      dropAcks.includes("ack:changes-vs-published"),
+    "drop: the unchanged spacing warning is shown as already accepted; changed and new ones need a tick",
+    dropAcks.join(", "),
+  );
+  r = await submit(
+    dropPath,
+    org.cookie,
+    "I&#x27;ve reviewed this",
+    Object.fromEntries(
+      dropAcks.filter((a) => a !== "ack:unfilled-slots").map((a) => [a, "on"]),
+    ),
+    { keepChecked: false },
+  );
+  check(
+    /Not acknowledged: \d+ empty seats/.test(flash(r.url)),
+    "drop: publishing without ticking a CHANGED warning is refused, server-side",
+    flash(r.url),
+  );
+
   // A second late change drafted from the same version goes stale once the
   // first is published.
   const { data: secondLate } = await db

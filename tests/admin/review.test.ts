@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { reviewSchedule, type ReviewInput } from "../../lib/admin/review.ts";
+import {
+  alreadyAccepted,
+  reviewSchedule,
+  type ReviewInput,
+  type ReviewWarning,
+} from "../../lib/admin/review.ts";
 import {
   clock,
   utcToZonedLocal,
@@ -286,4 +291,60 @@ test("zoned times: November 8 2026 10:00 in Los Angeles is 18:00 UTC (PST)", () 
     utcToZonedLocal(zonedLocalToUtc("2026-11-01T12:30", LA), LA),
     "2026-11-01T12:30",
   );
+});
+
+test("only warnings identical to the published version's are already accepted", () => {
+  const w = (
+    id: ReviewWarning["id"],
+    title: string,
+    ...detail: string[]
+  ): ReviewWarning => ({
+    id,
+    title,
+    detail,
+  });
+  const published = [
+    w(
+      "tight-spacing",
+      "1 team with fewer than 3 slots between presentations",
+      "Late Owls: 1 slot apart",
+    ),
+    w(
+      "unfilled-slots",
+      "14 empty seats across stations",
+      "Judges will have idle slots.",
+    ),
+    w(
+      "heavy-overlap",
+      "1 station pair share more than 5 teams",
+      "Station 1 and Station 7: 6 teams in common",
+    ),
+  ];
+  const draft = [
+    // unchanged: accepted
+    w(
+      "tight-spacing",
+      "1 team with fewer than 3 slots between presentations",
+      "Late Owls: 1 slot apart",
+    ),
+    // got worse (more idle seats): new
+    w(
+      "unfilled-slots",
+      "16 empty seats across stations",
+      "Judges will have idle slots.",
+    ),
+    // same title, but a detail line changed: new
+    w(
+      "heavy-overlap",
+      "1 station pair share more than 5 teams",
+      "Station 1 and Station 7: 7 teams in common",
+    ),
+    // not there before: new
+    w(
+      "changes-vs-published",
+      "Changes from the published v3: 0 moved, 0 added, 1 removed",
+    ),
+  ];
+  assert.deepEqual([...alreadyAccepted(draft, published)], ["tight-spacing"]);
+  assert.deepEqual([...alreadyAccepted(draft, [])], []);
 });

@@ -230,6 +230,21 @@ diff against the version they replaced.
   can't be published, since publishing it would undo that change.
 - Generate, once a version is published, requires an explicit "regenerate
   anyway" acknowledgement and points to late changes instead.
+- **Acknowledgements on late-change drafts.** Warnings identical to the
+  published version's (same kind, title and every detail line) were accepted
+  when it was published: they stay visible as "already accepted in vN" but
+  need no new tick. Anything changed at all (spacing 3 -> 2, 14 idle seats
+  -> 16) or new needs one, enforced server-side too. Reason: at 10:15 with a
+  team waiting, five tick boxes means nobody reads the one that matters
+  ("0 moved, 0 added, 1 removed"); fewer, meaningful acknowledgements beat
+  complete ones nobody reads. Hiding them was rejected: "you don't need to
+  re-tick this" and "we hid this from you" are different things.
+- **Pattern: a stale draft must never silently undo real changes.** Two
+  instances so far, both blocked as structural errors: a late change
+  drafted from a version that's no longer published (`stats.basedOn`), and
+  any draft older than the published version (`supersededBy`). Any new way
+  of creating or publishing a draft must answer "what if something was
+  published after this was drafted?"
 - **Generate with slack.** At the minimum slot count every seat is full
   (60 teams on 8 stations: 15 slots, 120 seats), so the first late team adds
   two slots and costs every judge 14 minutes. The generate screen defaults

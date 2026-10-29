@@ -33,10 +33,19 @@ second project isn't ready.
       for up to 8 late arrivals at no added time, and slack for the per-slot
       timing drift that builds up across a morning. The generate screen
       suggests this by default; don't clear the field.
-- [ ] A team arrives late or leaves: open the **published** version and use
-      **Late changes** (add a late team / drop a team). Each drafts the next
-      version with only that change; review it and publish it. Never
-      regenerate after publishing: teams have screenshotted their times.
+- [ ] A team arrives late or leaves: on **Schedules**, click **"Late team
+      or dropped team"** beside the published version. It opens straight on
+      **Late changes**, the first section of a published schedule (above the
+      coverage, spacing and grid). Add a late team or drop a team; each
+      drafts the next version with only that change; review and publish it.
+      Never regenerate after publishing: teams have screenshotted their
+      times.
+- [ ] On a late-change draft, only **new or changed** warnings need a tick.
+      Warnings identical to the published version's show as "Already
+      accepted in vN" (still visible, no tick box). Read the ticked ones,
+      above all "Changes from the published vN: 0 moved, 1 added".
+- [ ] An older draft lying around (the list says "superseded by vN") can't
+      be published: it would undo the late changes since.
 
 ## Rehearse late changes in the dry run
 

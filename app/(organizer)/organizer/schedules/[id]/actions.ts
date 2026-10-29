@@ -13,7 +13,7 @@ import {
 } from "@/lib/admin/data";
 import { placeLateTeam } from "@/lib/admin/late";
 import { draftLateChange } from "@/lib/admin/late-change";
-import { reviewSchedule } from "@/lib/admin/review";
+import { alreadyAccepted, reviewSchedule } from "@/lib/admin/review";
 import { back } from "../../_ui/redirect";
 
 /**
@@ -40,8 +40,14 @@ export async function publishSchedule(form: FormData) {
     back(path, {
       error: "This schedule has structural errors and can't be published.",
     });
+  // Warnings unchanged from the published version a late change copies were
+  // accepted when it was published; everything else needs a tick.
+  const carried = alreadyAccepted(
+    review.warnings,
+    view.accepted?.warnings ?? [],
+  );
   const missing = review.warnings.filter(
-    (w) => form.get(`ack:${w.id}`) !== "on",
+    (w) => !carried.has(w.id) && form.get(`ack:${w.id}`) !== "on",
   );
   if (missing.length) {
     back(path, {

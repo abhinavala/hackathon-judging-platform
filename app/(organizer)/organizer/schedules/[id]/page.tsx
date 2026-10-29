@@ -6,7 +6,12 @@ import {
   loadSchedules,
   loadTeams,
 } from "@/lib/admin/data";
-import { MAX_SHARED, MIN_GAP, reviewSchedule } from "@/lib/admin/review";
+import {
+  alreadyAccepted,
+  MAX_SHARED,
+  MIN_GAP,
+  reviewSchedule,
+} from "@/lib/admin/review";
 import { clock } from "@/lib/admin/time";
 import { Flash, Section, button, input, table } from "../../_ui/ui";
 import {
@@ -33,6 +38,12 @@ export default async function SchedulePage({
   if (!view) notFound();
   const { event, schedule, slots, stations, teams } = view;
   const review = reviewSchedule(view.review);
+  // Late-change drafts: warnings identical to the published version's were
+  // accepted when it was published. Shown, but not ticked again.
+  const carried = alreadyAccepted(
+    review.warnings,
+    view.accepted?.warnings ?? [],
+  );
   const tz = event.timezone;
   const isDraft = schedule.status === "draft";
   const late = schedule.stats?.lateChange ?? null;
@@ -133,21 +144,34 @@ export default async function SchedulePage({
             <p className="mb-3 text-sm text-green-800">No warnings.</p>
           ) : (
             <ul className="mb-3 space-y-3">
-              {review.warnings.map((w) => (
+              {[
+                ...review.warnings.filter((w) => !carried.has(w.id)),
+                ...review.warnings.filter((w) => carried.has(w.id)),
+              ].map((w) => (
                 <li
                   key={w.id}
-                  className="rounded border border-amber-600 p-3 text-sm"
+                  className={`rounded border p-3 text-sm ${carried.has(w.id) ? "border-gray-400" : "border-amber-600"}`}
                 >
-                  <p className="font-semibold">⚠️ {w.title}</p>
+                  <p className="font-semibold">
+                    {carried.has(w.id) ? "✓ " : "⚠️ "}
+                    {w.title}
+                  </p>
                   <ul className="my-1 max-h-48 list-disc overflow-auto pl-6">
                     {w.detail.map((d) => (
                       <li key={d}>{d}</li>
                     ))}
                   </ul>
-                  <label className="mt-1 flex items-center gap-2 font-medium">
-                    <input type="checkbox" name={`ack:${w.id}`} required />
-                    I&apos;ve reviewed this. Publish anyway.
-                  </label>
+                  {carried.has(w.id) ? (
+                    <p className="mt-1 font-medium">
+                      Already accepted in v{view.accepted?.version}: unchanged
+                      since you published it, so no need to tick it again.
+                    </p>
+                  ) : (
+                    <label className="mt-1 flex items-center gap-2 font-medium">
+                      <input type="checkbox" name={`ack:${w.id}`} required />
+                      I&apos;ve reviewed this. Publish anyway.
+                    </label>
+                  )}
                 </li>
               ))}
             </ul>

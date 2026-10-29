@@ -400,3 +400,24 @@ function diffAgainst(
       removed.push({ name: name.get(teamId) ?? teamId, from });
   return { againstVersion: pub.version, moved, added, removed };
 }
+
+/**
+ * Warnings on a late-change draft that are IDENTICAL to ones on the published
+ * version it copies: same kind, same title, every detail line the same. Those
+ * were accepted when that version was published, so they're shown as
+ * "already accepted" without asking for another tick.
+ *
+ * Identical means identical. A warning that changed at all (spacing 3 slots
+ * -> 2, 14 idle seats -> 16, one more station over the overlap limit) is new
+ * and must be acknowledged, and so is anything that wasn't there before. The
+ * point is fewer, meaningful acknowledgements: at 10:15, five tick boxes
+ * means nobody reads the one that matters ("0 moved, 0 added, 1 removed").
+ */
+export function alreadyAccepted(
+  warnings: ReviewWarning[],
+  accepted: ReviewWarning[],
+): Set<WarningId> {
+  const key = (w: ReviewWarning) => JSON.stringify([w.id, w.title, w.detail]);
+  const before = new Set(accepted.map(key));
+  return new Set(warnings.filter((w) => before.has(key(w))).map((w) => w.id));
+}

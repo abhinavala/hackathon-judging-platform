@@ -3,7 +3,11 @@ import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
-import type { ReviewInput } from "@/lib/admin/review";
+import {
+  reviewSchedule,
+  type ReviewInput,
+  type ReviewWarning,
+} from "@/lib/admin/review";
 
 // Reads for the organizer screens. Everything goes through the organizer's
 // own session (RLS: organizers see everything), never the service role.
@@ -257,6 +261,12 @@ export type ScheduleView = {
   teams: Team[];
   published: ScheduleRow | null;
   review: ReviewInput;
+  /**
+   * For a late-change draft: the warnings of the published version it
+   * copies, which were accepted when that version was published (see
+   * alreadyAccepted() in lib/admin/review.ts). Null for any other schedule.
+   */
+  accepted: { version: number; warnings: ReviewWarning[] } | null;
 };
 
 /**
@@ -268,6 +278,7 @@ export type ScheduleView = {
 export async function loadScheduleView(
   db: Db,
   scheduleId: string,
+  { withAccepted = true }: { withAccepted?: boolean } = {},
 ): Promise<ScheduleView | null> {
   const schedule = must(
     await db.from("schedules").select("*").eq("id", scheduleId).maybeSingle(),
@@ -333,7 +344,25 @@ export async function loadScheduleView(
     ? await scheduleContents(db, compareTo.id)
     : null;
 
+  let accepted: ScheduleView["accepted"] = null;
+  if (
+    withAccepted &&
+    schedule.status === "draft" &&
+    schedule.stats?.basedOn &&
+    published
+  ) {
+    const pubView = await loadScheduleView(db, published.id, {
+      withAccepted: false,
+    });
+    if (pubView)
+      accepted = {
+        version: published.version,
+        warnings: reviewSchedule(pubView.review).warnings,
+      };
+  }
+
   return {
+    accepted,
     event,
     schedule,
     slots: contents.slots,
