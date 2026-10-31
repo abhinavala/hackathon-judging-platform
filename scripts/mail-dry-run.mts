@@ -1,28 +1,35 @@
-// npm run mail:dry-run -- ... : the full-scale email rehearsal. Mints a real
-// sign-in link for EVERY team member of an event on the Preview project,
-// redirects each one to a test inbox (real recipient in the subject), and
-// sends them all to the Apps Script relay as ONE batch, timing it. The point
-// is two numbers: whether ~250 sends finish inside Apps Script's execution
-// limit, and how much daily quota is left afterwards.
+// npm run mail:dry-run -- ... : the email rehearsal. Mints a real sign-in
+// link for team members of an event on the Preview project, redirects each
+// one to a test inbox (real recipient in the subject), sends them, and times
+// it. Settings come from .env.relay (gitignored) or the environment.
 //
-//   APPS_SCRIPT_URL=... APPS_SCRIPT_SECRET=... npm run mail:dry-run -- \
+//   npm run mail:dry-run -- --ping
+//   npm run mail:dry-run -- \
 //     --project-ref <preview ref> \
 //     --site-url https://<preview deployment>.vercel.app \
-//     --inboxes a@x.com,b@y.com,c@z.com \
-//     --confirm
+//     --inboxes a@scu.edu,b@y.com \
+//     --limit 20 --confirm
 //
 // Options:
-//   --ping          only check the relay (deployment, secret, version, quota);
-//                   needs neither --project-ref nor --confirm
+//   --sender S      smtp (default: SMTP_* settings) or appsScript
+//                   (APPS_SCRIPT_URL, APPS_SCRIPT_SECRET)
+//   --ping          only check the sender: SMTP connects, upgrades to TLS and
+//                   logs in; the relay reports its version and quota. Sends
+//                   nothing; needs neither --project-ref nor --confirm
 //   --event SLUG    default aws-a10-2026
-//   --template T    default schedule (signin | invite | schedule | credentials)
+//   --template T    default invite (signin | checkin | invite | schedule |
+//                   credentials)
 //   --limit N       send to the first N members only
 //   --inboxes       or AUTH_LINK_REDIRECT_TO
 //
+// SMTP sends over one connection, in order, as a check-in's batch does. It
+// can't report remaining quota (Gmail doesn't expose it; the documented
+// limit is 2,000 messages/day for a Workspace account).
+//
 // Guards: refuses the PRODUCTION project ref (the links would sign people
 // into real accounts), sends nothing without --confirm, and never prints a
-// link (each one is a live sign-in for a Preview account). The secret key
-// comes from the Supabase CLI and is never printed.
+// link or a password (each link is a live sign-in for a Preview account).
+// The Supabase secret key comes from the Supabase CLI and is never printed.
 
 import { spawnSync } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
@@ -34,6 +41,11 @@ import {
   type LinkTemplate,
 } from "../lib/auth/relay.ts";
 import {
+  createSmtpTransport,
+  sendSmtp,
+  smtpConfigFrom,
+} from "../lib/auth/smtp.ts";
+import {
   parseInboxes,
   redirectMessage,
   redirectRefusal,
@@ -44,6 +56,7 @@ const BATCH_TIMEOUT_MS = 7 * 60_000;
 const MINT_CONCURRENCY = 8;
 const TEMPLATES: LinkTemplate[] = [
   "signin",
+  "checkin",
   "invite",
   "schedule",
   "credentials",
@@ -103,12 +116,70 @@ function secretKey(ref: string): string {
 
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 
-async function main() {
+type Outcome = {
+  sent: number;
+  failed: { email: string | null; error: string }[];
+  error?: string;
+};
+type Courier = {
+  /** Proves the sender works without sending; returns a line to print. */
+  ping(): Promise<string>;
+  send(messages: LinkMessage[]): Promise<Outcome>;
+  /** After sending: a line comparing quota, where the sender can tell. */
+  after(): Promise<string>;
+  limitNote: string;
+};
+
+function smtpCourier(): Courier {
+  let config: ReturnType<typeof smtpConfigFrom>;
+  try {
+    config = smtpConfigFrom(process.env);
+  } catch (e) {
+    fail(e instanceof Error ? e.message : String(e));
+  }
+  return {
+    async ping() {
+      const t = createSmtpTransport(config);
+      try {
+        await t.verify();
+      } catch (e) {
+        fail(`SMTP login failed: ${e instanceof Error ? e.message : e}`);
+      } finally {
+        t.close();
+      }
+      return `SMTP OK: logged in to ${config.host}:${config.port} as ${config.user} over TLS; sending as "${config.fromName}", replies to ${config.replyTo}. (Gmail doesn't report remaining quota; the Workspace limit is 2,000/day.)`;
+    },
+    async send(messages) {
+      const t = createSmtpTransport(config, { pool: true });
+      const failed: Outcome["failed"] = [];
+      try {
+        for (const m of messages) {
+          try {
+            await sendSmtp(t, config, m);
+          } catch (e) {
+            failed.push({
+              email: m.email,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+      } finally {
+        t.close();
+      }
+      return { sent: messages.length - failed.length, failed };
+    },
+    async after() {
+      return "n/a (SMTP)";
+    },
+    limitNote: "",
+  };
+}
+
+function relayCourier(): Courier {
   const relayUrl = process.env.APPS_SCRIPT_URL;
   const relaySecret = process.env.APPS_SCRIPT_SECRET;
   if (!relayUrl || !relaySecret)
     fail("set APPS_SCRIPT_URL and APPS_SCRIPT_SECRET in the environment");
-
   const ping = async () => {
     const reply = await callRelay(
       relayUrl,
@@ -120,15 +191,55 @@ async function main() {
       fail(`relay ping failed: ${JSON.stringify(reply)}`);
     return reply;
   };
-  const before = await ping();
-  console.log(
-    `Relay OK: version ${before.relayVersion ?? "1 (no subject tags: redeploy Code.gs)"}, ${before.quotaRemaining} sends left today.`,
-  );
+  let before: Awaited<ReturnType<typeof ping>> | undefined;
+  return {
+    async ping() {
+      before = await ping();
+      if (!before.relayVersion || before.relayVersion < 2)
+        fail(
+          "the deployed relay predates subject tags; redeploy apps-script/Code.gs first",
+        );
+      return `Relay OK: version ${before.relayVersion}, ${before.quotaRemaining} sends left today.`;
+    },
+    async send(messages) {
+      const sendStart = Date.now();
+      try {
+        const reply = await callRelay(
+          relayUrl,
+          relaySecret,
+          { messages },
+          BATCH_TIMEOUT_MS,
+        );
+        return {
+          sent: reply.sent ?? 0,
+          failed: reply.failed ?? [],
+          error: reply.ok ? undefined : reply.error,
+        };
+      } catch (e) {
+        const after = await ping().catch(() => null);
+        fail(
+          `the batch didn't return after ${seconds(Date.now() - sendStart)}: ${e instanceof Error ? e.message : e}. ` +
+            `Quota now ${after?.quotaRemaining ?? "unknown"} (was ${before?.quotaRemaining}), so about ${
+              after ? before!.quotaRemaining! - after.quotaRemaining! : "?"
+            } went out.`,
+        );
+      }
+    },
+    async after() {
+      const after = await ping();
+      return `${before?.quotaRemaining} before -> ${after.quotaRemaining} after`;
+    },
+    limitNote: "; Apps Script limit 360 s",
+  };
+}
+
+async function main() {
+  const senderName = flag("sender") ?? "smtp";
+  if (senderName !== "smtp" && senderName !== "appsScript")
+    fail("--sender must be smtp or appsScript");
+  const courier = senderName === "smtp" ? smtpCourier() : relayCourier();
+  console.log(await courier.ping());
   if (has("ping")) return;
-  if (!before.relayVersion || before.relayVersion < 2)
-    fail(
-      "the deployed relay predates subject tags; redeploy apps-script/Code.gs first",
-    );
 
   const ref = flag("project-ref") ?? fail("--project-ref is required");
   const supabaseUrl = `https://${ref}.supabase.co`;
@@ -143,7 +254,7 @@ async function main() {
   );
   if (inboxes.length === 0)
     fail("--inboxes (or AUTH_LINK_REDIRECT_TO) is required");
-  const template = (flag("template") ?? "schedule") as LinkTemplate;
+  const template = (flag("template") ?? "invite") as LinkTemplate;
   if (!TEMPLATES.includes(template))
     fail(`--template must be one of ${TEMPLATES.join(", ")}`);
   const slug = flag("event") ?? "aws-a10-2026";
@@ -209,46 +320,31 @@ async function main() {
   );
   const mintMs = Date.now() - mintStart;
   console.log(
-    `Minted ${messages.length} links in ${seconds(mintMs)}. Sending one batch...`,
+    `Minted ${messages.length} links in ${seconds(mintMs)}. Sending via ${senderName}...`,
   );
 
   const sendStart = Date.now();
-  let reply;
-  try {
-    reply = await callRelay(
-      relayUrl,
-      relaySecret,
-      { messages },
-      BATCH_TIMEOUT_MS,
-    );
-  } catch (e) {
-    const after = await ping().catch(() => null);
-    fail(
-      `the batch didn't return after ${seconds(Date.now() - sendStart)}: ${e instanceof Error ? e.message : e}. ` +
-        `Quota now ${after?.quotaRemaining ?? "unknown"} (was ${before.quotaRemaining}), so about ${
-          after ? before.quotaRemaining! - after.quotaRemaining! : "?"
-        } went out.`,
-    );
-  }
+  const outcome = await courier.send(messages);
   const sendMs = Date.now() - sendStart;
-  const after = await ping();
+  const quota = await courier.after();
+  const ok = outcome.failed.length === 0 && !outcome.error;
 
   const perInbox = new Map<string, number>();
   for (const m of messages)
     perInbox.set(m.email, (perInbox.get(m.email) ?? 0) + 1);
   console.log(`
 Result
-  sent            ${reply.sent ?? 0} of ${messages.length}${reply.ok ? "" : "  (NOT all: see failures)"}
-  send wall time  ${seconds(sendMs)}  (${(sendMs / Math.max(1, messages.length)).toFixed(0)} ms per message; Apps Script limit 360 s)
+  sent            ${outcome.sent} of ${messages.length}${ok ? "" : "  (NOT all: see failures)"}
+  send wall time  ${seconds(sendMs)}  (${(sendMs / Math.max(1, messages.length)).toFixed(0)} ms per message${courier.limitNote})
   mint time       ${seconds(mintMs)}
-  quota           ${before.quotaRemaining} before -> ${after.quotaRemaining} after
+  quota           ${quota}
   inboxes         ${[...perInbox].map(([k, v]) => `${k}: ${v}`).join(", ")}`);
-  if (reply.failed?.length)
+  if (outcome.failed.length)
     console.log(
-      `  failures        ${JSON.stringify(reply.failed.slice(0, 10))}`,
+      `  failures        ${JSON.stringify(outcome.failed.slice(0, 10))}`,
     );
-  if (reply.error) console.log(`  relay error     ${reply.error}`);
-  if (!reply.ok) process.exit(1);
+  if (outcome.error) console.log(`  sender error    ${outcome.error}`);
+  if (!ok) process.exit(1);
 }
 
 main().catch((e) => fail(e instanceof Error ? e.message : String(e)));
