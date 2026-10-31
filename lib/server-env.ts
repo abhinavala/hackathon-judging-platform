@@ -7,6 +7,8 @@ import "server-only";
 // secrets present, and a missing value fails the request that needs it rather
 // than the whole app.
 
+import { smtpConfigFrom, type SmtpConfig } from "@/lib/auth/smtp";
+
 const isProduction = process.env.NODE_ENV === "production";
 
 // Bypasses RLS. Used only to mint sign-in links (and, from Phase 2, by the
@@ -40,20 +42,31 @@ export function siteUrl(): string {
   return "http://127.0.0.1:3000";
 }
 
-export type LinkSenderName = "console" | "mailpit" | "appsScript";
+export type LinkSenderName = "console" | "mailpit" | "smtp" | "appsScript";
 
 export function linkSenderName(): LinkSenderName {
   const value = process.env.AUTH_LINK_SENDER ?? (isProduction ? "" : "console");
-  if (value === "console" || value === "mailpit" || value === "appsScript") {
+  if (
+    value === "console" ||
+    value === "mailpit" ||
+    value === "smtp" ||
+    value === "appsScript"
+  ) {
     return value;
   }
   throw new Error(
-    `AUTH_LINK_SENDER must be console, mailpit or appsScript (got "${value}")`,
+    `AUTH_LINK_SENDER must be console, mailpit, smtp or appsScript (got "${value}")`,
   );
 }
 
 export function mailpitUrl(): string {
   return process.env.MAILPIT_URL ?? "http://127.0.0.1:54324";
+}
+
+// AUTH_LINK_SENDER=smtp: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD (an
+// App Password), SMTP_FROM_NAME, SMTP_REPLY_TO. All server-only.
+export function smtpConfig(): SmtpConfig {
+  return smtpConfigFrom(process.env);
 }
 
 export function appsScriptUrl(): string {
