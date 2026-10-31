@@ -115,10 +115,25 @@ function wrap(
   link: string,
   code: string | null,
 ): RenderedEmail {
+  // Where the code works: the team page needs no sign-in, so it still works
+  // when the link has expired or never arrived. Written out as visible URLs,
+  // because forwarded mail and some clients drop buttons.
+  const site = siteOf(link);
   const codeBlock = code
     ? '<p style="margin:24px 0 0;padding:12px 16px;background:#f4f4f2;border-radius:8px;' +
-      'font-size:14px;color:#3d3d3a">If the link does not work, you can look up your ' +
-      'schedule with your team code <strong style="font-family:monospace;font-size:16px">' +
+      'font-size:14px;color:#3d3d3a">If the link does not work, see your schedule at ' +
+      (site
+        ? '<a href="' +
+          esc(site + "/t/" + code) +
+          '" style="color:#1a1a19">' +
+          esc(site + "/t/" + code) +
+          '</a>, or go to <a href="' +
+          esc(site + "/t") +
+          '" style="color:#1a1a19">' +
+          esc(site + "/t") +
+          "</a> and enter "
+        : "the team page with ") +
+      'your team code <strong style="font-family:monospace;font-size:16px">' +
       esc(code) +
       "</strong>.</p>"
     : "";
@@ -153,9 +168,25 @@ function wrap(
     link +
     "\n\n" +
     "This link expires in 4 hours and can only be used once." +
-    (code ? "\n\nTeam code: " + code : "");
+    (code
+      ? "\n\nIf the link does not work, see your schedule at " +
+        (site
+          ? site + "/t/" + code + ", or go to " + site + "/t and enter "
+          : "the team page with ") +
+        "your team code " +
+        code +
+        "."
+      : "");
 
   return { subject, html, text };
+}
+
+// "https://host[:port]" from the sign-in link, which the server builds from
+// SITE_URL, so the team-page URL is right per environment. A regex, because
+// Code.gs (Apps Script has no URL class) must do it the same way.
+function siteOf(link: string): string {
+  const m = /^(https?:\/\/[^/?#]+)/.exec(String(link || ""));
+  return m ? m[1] : "";
 }
 
 // HTML body -> plain text: paragraphs on their own lines, tags dropped,

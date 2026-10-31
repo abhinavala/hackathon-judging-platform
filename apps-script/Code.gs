@@ -22,7 +22,7 @@ var FROM_NAME   = 'SCU ACM';
 var REPLY_TO    = 'acm@scu.edu';
 // Bump on every change; ping reports it so the caller can confirm which
 // deployment is live.
-var RELAY_VERSION = 3;
+var RELAY_VERSION = 4;
 
 // ---------------------------------------------------------------- entry point
 function doPost(e) {
@@ -183,10 +183,19 @@ function render(template, link, data) {
 }
 
 function wrap(subject, bodyHtml, buttonLabel, link, code) {
+  // Where the code works: the team page needs no sign-in, so it still works
+  // when the link has expired or never arrived. Written out as visible URLs,
+  // because forwarded mail and some clients drop buttons.
+  var site = siteOf(link);
   var codeBlock = code
     ? '<p style="margin:24px 0 0;padding:12px 16px;background:#f4f4f2;border-radius:8px;' +
-      'font-size:14px;color:#3d3d3a">If the link does not work, you can look up your ' +
-      'schedule with your team code <strong style="font-family:monospace;font-size:16px">' +
+      'font-size:14px;color:#3d3d3a">If the link does not work, see your schedule at ' +
+      (site
+        ? '<a href="' + esc(site + '/t/' + code) + '" style="color:#1a1a19">' +
+          esc(site + '/t/' + code) + '</a>, or go to <a href="' + esc(site + '/t') +
+          '" style="color:#1a1a19">' + esc(site + '/t') + '</a> and enter '
+        : 'the team page with ') +
+      'your team code <strong style="font-family:monospace;font-size:16px">' +
       esc(code) + '</strong>.</p>'
     : '';
 
@@ -211,12 +220,24 @@ function wrap(subject, bodyHtml, buttonLabel, link, code) {
     plain(bodyHtml) + '\n\n' +
     link + '\n\n' +
     'This link expires in 4 hours and can only be used once.' +
-    (code ? '\n\nTeam code: ' + code : '');
+    (code
+      ? '\n\nIf the link does not work, see your schedule at ' +
+        (site ? site + '/t/' + code + ', or go to ' + site + '/t and enter ' : 'the team page with ') +
+        'your team code ' + code + '.'
+      : '');
 
   return { subject: subject, html: html, text: text };
 }
 
 // ---------------------------------------------------------------- helpers
+// "https://host[:port]" from the sign-in link, which the server builds from
+// SITE_URL, so the team-page URL is right per environment. A regex, because
+// Apps Script has no URL class.
+function siteOf(link) {
+  var m = /^(https?:\/\/[^\/?#]+)/.exec(String(link || ''));
+  return m ? m[1] : '';
+}
+
 function json(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))

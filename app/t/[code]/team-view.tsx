@@ -62,6 +62,7 @@ export function TeamViewClient({
   initial: TeamView | null;
   fetchedAt: number | null;
   welcome?: {
+    site: string;
     receiptSent: boolean;
     invited: number;
     inviteFailures: number;
@@ -364,11 +365,13 @@ export function TeamViewClient({
  */
 function Welcome({
   code,
+  site,
   receiptSent,
   invited,
   inviteFailures,
 }: {
   code: string;
+  site: string;
   receiptSent: boolean;
   invited: number;
   inviteFailures: number;
@@ -383,8 +386,15 @@ function Welcome({
       <p className="mt-3 text-lg">Your team&apos;s join code:</p>
       <p className="font-mono text-5xl font-extrabold tracking-wider">{code}</p>
       <p className="mt-2">
-        Screenshot this. The code opens this page, with your judging times, on
-        any phone, no sign-in needed.
+        Screenshot this. Your judging times are at{" "}
+        <Link className="font-semibold break-all underline" href={`/t/${code}`}>
+          {site}/t/{code}
+        </Link>{" "}
+        on any phone, no sign-in needed. Or go to{" "}
+        <Link className="font-semibold break-all underline" href="/t">
+          {site}/t
+        </Link>{" "}
+        and enter the code.
       </p>
       <ul className="mt-3 list-disc space-y-1 pl-5">
         <li>
@@ -396,7 +406,7 @@ function Welcome({
           <li>
             {inviteFailures === 0
               ? `We emailed ${invited} teammate${invited === 1 ? "" : "s"} an invitation to join.`
-              : `${invitedOk} of ${invited} teammate invitations went out. Share the code with the others.`}
+              : `${invitedOk} of ${invited} teammate invitations went out. Share the code and ${site}/t with the others.`}
           </li>
         )}
       </ul>
