@@ -12,7 +12,8 @@
 // `npm run db:reset && npm run seed`.
 //
 // Writes with the service role (bypasses RLS). Refuses to run against
-// anything but a local Supabase unless given --allow-remote.
+// anything but a local Supabase unless given --allow-remote (meant for the
+// Preview project), and refuses production even then.
 //
 // Team members and judges are roster rows only, keyed by email: signing in
 // with one of those addresses (the console sender prints the link) links the
@@ -22,6 +23,7 @@
 import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../lib/database.types";
+import { isProductionSupabase } from "../lib/prod-guard.ts";
 
 type Tables = Database["public"]["Tables"];
 type Insert<T extends keyof Tables> = Tables[T]["Insert"];
@@ -43,6 +45,8 @@ const SLOT_MINUTES = 7;
 const CHECKIN_OPENS_AT = "2026-11-07T09:00:00-08:00";
 const CHECKIN_CLOSES_AT = "2026-11-07T11:00:00-08:00";
 const JUDGING_STARTS_AT = "2026-11-08T10:00:00-08:00";
+// A placeholder too: the real place is set on /organizer/event.
+const HELP_LOCATION = "the check-in table by the main entrance";
 
 const AWS = "AWS";
 const A10 = "A10";
@@ -586,6 +590,12 @@ async function main() {
     );
   }
   const host = new URL(url).hostname;
+  // Preview exists to hold this fixture; production never does, flag or not.
+  if (isProductionSupabase(url)) {
+    throw new Error(
+      `Refusing to seed ${host}: that is the PRODUCTION project. --allow-remote doesn't override this.`,
+    );
+  }
   if (
     !["127.0.0.1", "localhost"].includes(host) &&
     !process.argv.includes("--allow-remote")
@@ -628,6 +638,8 @@ async function main() {
       slot_minutes: SLOT_MINUTES,
       checkin_opens_at: CHECKIN_OPENS_AT,
       checkin_closes_at: CHECKIN_CLOSES_AT,
+      judging_starts_at: JUDGING_STARTS_AT,
+      help_location: HELP_LOCATION,
     },
   ]);
 
@@ -852,7 +864,7 @@ async function ensureOrganizer(db: ReturnType<typeof createClient<Database>>) {
 
 main().catch((err: unknown) => {
   console.error(
-    `seed failed: ${err instanceof Error ? err.message : String(err)}`,
+    `seed failed: ${err instanceof Error ? err.message : JSON.stringify(err)}`,
   );
   process.exit(1);
 });

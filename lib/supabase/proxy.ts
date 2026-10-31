@@ -4,6 +4,7 @@ import type { Database } from "@/lib/database.types";
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/env";
 import { isSessionCookie, readClaims } from "@/lib/supabase/claims";
 import { rolesRequiredFor, type Role } from "@/lib/route-guards";
+import { normalizeCode } from "@/lib/team/view";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Paths an anonymous visitor may load. Everything else requires a session,
@@ -15,7 +16,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // announcements (backed by the team_schedule_by_code, public_board and
 // active_announcements RPCs).
 const PUBLIC_EXACT = ["/"];
-const PUBLIC_PREFIXES = ["/login", "/auth/callback", "/auth/signout"];
+const PUBLIC_PREFIXES = [
+  "/login",
+  // Phase 2: the check-in form is for people with no account yet.
+  "/checkin",
+  "/auth/callback",
+  "/auth/signout",
+  // Phase 4: deliberately anonymous. The team view by join code (and its
+  // code-entry form) and the big-screen board.
+  "/t",
+  "/board",
+];
 
 function isPublic(pathname: string) {
   return (
@@ -58,6 +69,19 @@ function accessUnavailable() {
 // bounces anonymous visitors to /login, and is THE gate for role-scoped route
 // groups (see lib/route-guards.ts). Data access is still enforced by RLS.
 export async function updateSession(request: NextRequest) {
+  // /t/abcd1234 -> /t/ABCD-1234 before anything renders (a page's own
+  // redirect() comes too late under Cache Components and becomes a 200).
+  const typedCode = /^\/t\/([^/]+)$/.exec(request.nextUrl.pathname)?.[1];
+  if (typedCode && typedCode !== "go") {
+    const raw = decodeURIComponent(typedCode);
+    const code = normalizeCode(raw);
+    if (code && code !== raw) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/t/${code}`;
+      return NextResponse.redirect(url);
+    }
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(
@@ -138,6 +162,14 @@ export async function updateSession(request: NextRequest) {
     const role = await readRole(supabase, auth.claims.sub);
     if (role === "unavailable") return accessUnavailable();
     if (!role || !required.includes(role)) {
+      // A POST (server action, form, the import endpoint) can't be rewritten
+      // to the not-found page: Next treats the rewritten request as a server
+      // action and answers 400. Refuse it with a plain 404 instead.
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        const refused = new NextResponse("Not found", { status: 404 });
+        response.cookies.getAll().forEach((c) => refused.cookies.set(c));
+        return refused;
+      }
       const url = request.nextUrl.clone();
       url.pathname = NOT_FOUND_PATH;
       url.search = "";

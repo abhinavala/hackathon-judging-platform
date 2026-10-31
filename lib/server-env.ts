@@ -64,6 +64,13 @@ export function appsScriptSecret(): string {
   return required("APPS_SCRIPT_SECRET");
 }
 
+// Dry runs only: deliver every sign-in link to one of these inboxes
+// (comma-separated) instead of its recipient. lib/auth/redirect.ts refuses it
+// on production; unset everywhere else.
+export function linkRedirectInboxes(): string | undefined {
+  return process.env.AUTH_LINK_REDIRECT_TO;
+}
+
 export { isProduction };
 
 function required(name: string): string {

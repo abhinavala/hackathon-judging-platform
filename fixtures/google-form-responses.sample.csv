@@ -1,0 +1,18 @@
+Timestamp,Email Address,Full Name,"Your Phone Number
+We will contact you in case of any emergencies or issues","How many people are on your team?
+Be sure to account for yourself as well",Please list the full names of all your teammates,Does your team have AT LEAST 1 graduate student?,Does your team consist of ENTIRELY freshmen members?,Does your team consist of HALF OR MORE non-male members?,"Aside from the H4H Grand Prizes (1st, 2nd, 3rd), what other prizes is your team planning to potentially compete in?
+View the Prize descriptions and requirements here: H4H Prize Guide","The link to your PUBLIC Github repository(s)
+If you have more than one, separate them by commas",Questions or Comments
+2/28/2026 10:38:27,aaa@example.edu,Ada Lovelace,9705550101,3,"Grace Hopper, Alan Turing",Yes,No,No,"Best Use of WebSpatial, Future Unicorn Award, Best Project Built w/ ElevenLabs, Best Use of AMD Tech, Best Use of Responsible AI, Best in Play (Top Game)",https://github.com/example/alpha,
+2/28/2026 10:41:20,bbb@example.edu,Katherine Johnson,+1 (925) 555-0102,3,Mary Jackson. Dorothy Vaughan,No,No,Yes,"Future Unicorn Award, Best Use of Responsible AI",https://github.com/example/beta.git,
+2/28/2026 10:52:49,ccc@example.edu,Alan Kay,650-555-0103 ,3,Seymour Papert ; Cynthia Solomon,No,No,No,Best Use of AMD Tech,github.com/example/gamma ,N/A
+2/28/2026 10:54:35,ddd@example.edu,Barbara Liskov,408 555 0104,5,"Barbara Liskov
+Radia Perlman
+Frances Allen
+Shafi Goldwasser",Yes,No,Yes,"Best Use of WebSpatial, Best Project Built w/ ElevenLabs",https://github.com/example/delta,
+2/28/2026 11:08:48,eee@example.edu,Donald Knuth,9085550105,2,Leslie Lamport,No,No,No,,https://github.com/example/epsilon,
+3/1/2026 0:41:47,fff@example.edu,Margaret Hamilton,6695550106,4,"Jean Bartik, Betty Holberton, Kay McNulty",No,No,Yes,"Future Unicorn Award, Best in Play (Top Game)",https://github.com/example/zeta.git,
+2/28/2026 11:35:00,ggg@example.edu,Edsger Dijkstra,15105550107,6,"Tony Hoare, Niklaus Wirth, Peter Naur, Ole-Johan Dahl, Kristen Nygaard",No,No,No,,"https://github.com/example/eta-backend, https://github.com/example/eta-frontend",
+2/28/2026 11:52:31,bbb@example.edu,Katherine Johnson,+1 (925) 555-0102,3,"Mary Jackson, Dorothy Vaughan",No,No,Yes,"Future Unicorn Award, Best Use of Responsible AI, Best Use of AMD Tech",https://github.com/example/beta-corrected,"We posted the wrong github link, here is the corrected one"
+2/28/2026 12:05:15,hhh@example.edu,Vint Cerf,4085550108,2,Bob Kahn,Yes,No,No,Best Use of Responsible AI,https://github.com/example/theta,"Do we get free credits for ElevenLabs & AMD?
+Any other sponsor APIs for free?"

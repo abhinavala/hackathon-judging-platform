@@ -3,8 +3,7 @@
 // Run after `next build` (npm run test:smoke does both). Needs local Supabase
 // running (npx supabase start); it creates two smoke-test users there.
 import { spawn } from "node:child_process";
-import { createServerClient } from "@supabase/ssr";
-import { createClient } from "@supabase/supabase-js";
+import { setRole, signIn } from "./lib/session.mjs";
 
 const PORT = 3100;
 const base = `http://127.0.0.1:${PORT}`;
@@ -44,6 +43,55 @@ try {
     );
   }
 
+  // No-JavaScript sign-in: the form must work as plain HTML. The outcome is a
+  // redirect to /login?sent=... or ?error=..., and it must appear in the
+  // VISIBLE page, not only in React's script payload (a page that seems to
+  // do nothing makes people request again, replacing the link they got).
+  // Under `next start` the console sender refuses to run, so the expected
+  // outcome here is the visible "couldn't send" path.
+  const visible = (html) => html.replace(/<script[\s\S]*?<\/script>/g, "");
+  const loginHtml = await (await fetch(`${base}/login`)).text();
+  const loginForm = new FormData();
+  for (const m of loginHtml.matchAll(
+    /<input type="hidden" name="([^"]+)"(?: value="([^"]*)")?\/>/g,
+  )) {
+    loginForm.append(m[1], (m[2] ?? "").replaceAll("&quot;", '"'));
+  }
+  loginForm.append("email", "nojs-probe@example.test");
+  const posted = await fetch(`${base}/login`, {
+    method: "POST",
+    body: loginForm,
+    redirect: "manual",
+  });
+  const where = new URL(posted.headers.get("location") ?? "/", base);
+  if (
+    posted.status !== 303 ||
+    where.pathname !== "/login" ||
+    !(
+      where.searchParams.has("sent") ||
+      where.searchParams.get("error") === "send-failed"
+    )
+  ) {
+    throw new Error(
+      `no-JS login POST: expected 303 to /login?sent|error, got ${posted.status} ${where}`,
+    );
+  }
+  const outcome = visible(await (await fetch(where)).text());
+  if (
+    !/We sent a sign-in link to|We couldn(&#x27;|')t send your sign-in link/.test(
+      outcome,
+    )
+  ) {
+    throw new Error("no-JS login: the outcome is not in the visible page");
+  }
+  if (!outcome.includes("Send a new link to"))
+    throw new Error("no-JS login: no resend button");
+  const invalid = visible(
+    await (await fetch(`${base}/login?error=invalid-email`)).text(),
+  );
+  if (!invalid.includes("Enter a valid email address."))
+    throw new Error("no-JS login: invalid-email message missing");
+
   // Role gates: a mismatch must be a 404 STATUS, not a 200 carrying 404
   // content (which is what the layout guards alone produce under Cache
   // Components). The proxy is the gate. Each 404 is paired with a 200 on the
@@ -51,15 +99,39 @@ try {
   const participant = await signIn("smoke-participant@example.test");
   const judge = await signIn("smoke-judge@example.test", "judge");
   const organizer = await signIn("smoke-organizer@example.test", "organizer");
-  await expectStatus("/team", participant.cookie, 200);
+  await expectStatus("/team/none", participant.cookie, 200);
+  // /team is a real 307: to the team's view, or to /team/none without a team.
+  const teamRedirect = await fetch(`${base}/team`, {
+    headers: { cookie: participant.cookie },
+    redirect: "manual",
+  });
+  if (
+    teamRedirect.status !== 307 ||
+    teamRedirect.headers.get("location") !== "/team/none"
+  ) {
+    throw new Error(
+      `/team without a team: expected 307 -> /team/none, got ${teamRedirect.status} ${teamRedirect.headers.get("location")}`,
+    );
+  }
   await expectStatus("/judge", participant.cookie, 404);
   await expectStatus("/organizer", participant.cookie, 404);
   await expectStatus("/does-not-exist", participant.cookie, 404);
   await expectStatus("/judge", judge.cookie, 200);
   await expectStatus("/organizer", judge.cookie, 404);
-  await expectStatus("/team", judge.cookie, 200); // any signed-in user
+  await expectStatus("/team/none", judge.cookie, 200); // any signed-in user
   await expectStatus("/organizer", organizer.cookie, 200);
   await expectStatus("/judge", organizer.cookie, 404);
+  // A POST to a gated route is refused with a 404 too (not Next's 400).
+  const post = await fetch(`${base}/organizer`, {
+    method: "POST",
+    body: new FormData(),
+    headers: { cookie: participant.cookie },
+    redirect: "manual",
+  });
+  if (post.status !== 404)
+    throw new Error(
+      `POST /organizer as participant: expected 404, got ${post.status}`,
+    );
 
   // The role is read live, not from the JWT: promoting someone who is
   // already signed in takes effect on their next request, with the same
@@ -70,7 +142,7 @@ try {
   await expectStatus("/judge", late.cookie, 200);
 
   console.log(
-    "smoke: OK  /login renders; / public; anon /me -> /login; anon sign-out is a no-op; role gates are real 404s and read the role live",
+    "smoke: OK  /login renders; no-JS sign-in shows its outcome in the page; / public; anon /me -> /login; anon sign-out is a no-op; role gates are real 404s and read the role live",
   );
   exitCode = 0;
 } catch (err) {
@@ -88,64 +160,6 @@ async function expectStatus(path, cookie, expected) {
   if (res.status !== expected) {
     throw new Error(`${path}: expected HTTP ${expected}, got ${res.status}`);
   }
-}
-
-function admin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !secret) {
-    throw new Error("Supabase env missing (.env.local); is it set up?");
-  }
-  return createClient(url, secret, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
-// Sets profiles.role with the service role. No JWT, so the role-guard
-// trigger allows it, exactly like bootstrapping an organizer.
-async function setRole(userId, role) {
-  const { error } = await admin()
-    .from("profiles")
-    .update({ role })
-    .eq("user_id", userId);
-  if (error) throw new Error(`set role: ${error.message}`);
-}
-
-// Signs `email` in the way the app does (generateLink, then verifyOtp on the
-// token_hash) and returns the resulting auth cookies as a Cookie header.
-// Local Supabase only: this creates smoke-*@example.test users.
-async function signIn(email, role = "participant") {
-  const { data, error } = await admin().auth.admin.generateLink({
-    type: "magiclink",
-    email,
-  });
-  if (error) {
-    throw new Error(`generateLink: ${error.message} (npx supabase start?)`);
-  }
-  // Explicit, so a re-run starts from a known role.
-  await setRole(data.user.id, role);
-
-  const jar = new Map();
-  const client = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-    {
-      cookies: {
-        getAll: () => [...jar].map(([name, value]) => ({ name, value })),
-        setAll: (cookies) =>
-          cookies.forEach(({ name, value }) =>
-            value ? jar.set(name, value) : jar.delete(name),
-          ),
-      },
-    },
-  );
-  const { error: verifyError } = await client.auth.verifyOtp({
-    token_hash: data.properties.hashed_token,
-    type: data.properties.verification_type,
-  });
-  if (verifyError) throw new Error(`verifyOtp: ${verifyError.message}`);
-  const cookie = [...jar].map(([name, value]) => `${name}=${value}`).join("; ");
-  return { cookie, userId: data.user.id };
 }
 
 async function waitFor(url, timeoutMs) {

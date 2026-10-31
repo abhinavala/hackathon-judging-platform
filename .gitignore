@@ -29,3 +29,8 @@ npm-debug.log*
 
 # vercel
 .vercel
+
+# Form exports hold participants' names, emails and phone numbers: never
+# commit one. Only synthetic samples under fixtures/ are allowed.
+*.csv
+!fixtures/*.sample.csv

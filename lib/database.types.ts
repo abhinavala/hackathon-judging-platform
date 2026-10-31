@@ -83,14 +83,14 @@ isOneToOne: false
                   ]
                 },"events": {
                   Row: {
-                    "checkin_closes_at": string | null,"checkin_opens_at": string | null,"created_at": string,"id": string,"name": string,"slot_minutes": number,"slug": string,"timezone": string,"year": number
+                    "checkin_closes_at": string | null,"checkin_opens_at": string | null,"created_at": string,"help_location": string | null,"id": string,"judging_starts_at": string | null,"name": string,"slot_minutes": number,"slug": string,"timezone": string,"year": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "checkin_closes_at"?: string | null,"checkin_opens_at"?: string | null,"created_at"?: string,"id"?: string,"name": string,"slot_minutes"?: number,"slug": string,"timezone"?: string,"year": number
+                    "checkin_closes_at"?: string | null,"checkin_opens_at"?: string | null,"created_at"?: string,"help_location"?: string | null,"id"?: string,"judging_starts_at"?: string | null,"name": string,"slot_minutes"?: number,"slug": string,"timezone"?: string,"year": number
                   }
                   Update: {
-                    "checkin_closes_at"?: string | null,"checkin_opens_at"?: string | null,"created_at"?: string,"id"?: string,"name"?: string,"slot_minutes"?: number,"slug"?: string,"timezone"?: string,"year"?: number
+                    "checkin_closes_at"?: string | null,"checkin_opens_at"?: string | null,"created_at"?: string,"help_location"?: string | null,"id"?: string,"judging_starts_at"?: string | null,"name"?: string,"slot_minutes"?: number,"slug"?: string,"timezone"?: string,"year"?: number
                   }
                   Relationships: [
                     
@@ -171,6 +171,20 @@ isOneToOne: false
                   }
                   Update: {
                     "created_at"?: string,"email"?: string,"full_name"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"rate_limits": {
+                  Row: {
+                    "hits": number,"key": string,"window_start": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "hits"?: number,"key": string,"window_start": string
+                  }
+                  Update: {
+                    "hits"?: number,"key"?: string,"window_start"?: string
                   }
                   Relationships: [
                     
@@ -338,6 +352,12 @@ isOneToOne: false
               "body": string,"created_at": string,"level": Database["public"]['Enums']["announcement_level"]
             }[]
                            },
+"board_view":
+{ Args: { "p_event_slug": string }; Returns: Json
+                           },
+"check_in_team":
+{ Args: { "p": Json }; Returns: Json
+                           },
 "is_organizer":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
@@ -361,10 +381,19 @@ isOneToOne: false
               "location_text": string,"panel_label": string,"slot_index": number,"starts_at": string,"team_name": string
             }[]
                            },
+"publish_schedule":
+{ Args: { "p_schedule_id": string }; Returns: undefined
+                           },
+"rate_limit_hit":
+{ Args: { "p_key": string,"p_max": number,"p_window_seconds": number }; Returns: boolean
+                           },
 "team_schedule_by_code":
 { Args: { "p_code": string }; Returns: {
               "ends_at": string,"location_text": string,"panel_label": string,"slot_index": number,"starts_at": string,"team_name": string,"track_names": (string)[]
             }[]
+                           },
+"team_view":
+{ Args: { "p_code": string }; Returns: Json
                            }
           }
           Enums: {

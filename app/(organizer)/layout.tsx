@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireRole } from "@/lib/session";
 import { ORGANIZER_ROLES } from "@/lib/route-guards";
 
@@ -14,11 +15,38 @@ import { ORGANIZER_ROLES } from "@/lib/route-guards";
 // it, Cache Components fails the build for reading cookies outside Suspense.
 export const instant = false;
 
+const NAV = [
+  ["/organizer", "Overview"],
+  ["/organizer/event", "Event"],
+  ["/organizer/tracks", "Tracks"],
+  ["/organizer/import", "Import teams"],
+  ["/organizer/judges", "Judges"],
+  ["/organizer/panels", "Stations"],
+  ["/organizer/generate", "Generate"],
+  ["/organizer/schedules", "Schedules"],
+  ["/organizer/announcements", "Announcements"],
+] as const;
+
 export default async function OrganizerLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   await requireRole(...ORGANIZER_ROLES);
-  return <>{children}</>;
+  return (
+    <div className="mx-auto w-full max-w-6xl p-6 print:max-w-none print:p-0">
+      <nav className="mb-6 print:hidden flex flex-wrap gap-4 border-b pb-3 text-sm">
+        {NAV.map(([href, label]) => (
+          <Link
+            key={href}
+            href={href}
+            className="underline-offset-4 hover:underline"
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
+      {children}
+    </div>
+  );
 }
