@@ -7,8 +7,6 @@ import "server-only";
 // secrets present, and a missing value fails the request that needs it rather
 // than the whole app.
 
-import { smtpConfigFrom, type SmtpConfig } from "@/lib/auth/smtp";
-
 const isProduction = process.env.NODE_ENV === "production";
 
 // Bypasses RLS. Used only to mint sign-in links (and, from Phase 2, by the
@@ -61,12 +59,6 @@ export function linkSenderName(): LinkSenderName {
 
 export function mailpitUrl(): string {
   return process.env.MAILPIT_URL ?? "http://127.0.0.1:54324";
-}
-
-// AUTH_LINK_SENDER=smtp: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD (an
-// App Password), SMTP_FROM_NAME, SMTP_REPLY_TO. All server-only.
-export function smtpConfig(): SmtpConfig {
-  return smtpConfigFrom(process.env);
 }
 
 export function appsScriptUrl(): string {

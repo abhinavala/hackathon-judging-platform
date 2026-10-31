@@ -1,7 +1,7 @@
 import "server-only";
 import { SUPABASE_URL } from "@/lib/env";
 import { callRelay, type LinkMessage } from "@/lib/auth/relay";
-import { createSmtpTransport, sendSmtp } from "@/lib/auth/smtp";
+import { createSmtpTransport, sendSmtp, smtpConfigFrom } from "@/lib/auth/smtp";
 import {
   parseInboxes,
   redirectMessage,
@@ -14,7 +14,6 @@ import {
   linkRedirectInboxes,
   linkSenderName,
   mailpitUrl,
-  smtpConfig,
 } from "@/lib/server-env";
 
 export type { LinkMessage, LinkTemplate } from "@/lib/auth/relay";
@@ -134,6 +133,10 @@ const mailpitSender: LinkSender = {
 // most recipients). Templates and From/Reply-To are in lib/auth/smtp.ts.
 // A batch (a check-in's receipt and invites) shares one connection and sends
 // in order; each address succeeds or fails on its own.
+// SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD (an App Password),
+// SMTP_FROM_NAME, SMTP_REPLY_TO. All server-only; read per send.
+const smtpConfig = () => smtpConfigFrom(process.env);
+
 const smtpSender: LinkSender & {
   batch: (m: LinkMessage[]) => Promise<BatchOutcome>;
 } = {
