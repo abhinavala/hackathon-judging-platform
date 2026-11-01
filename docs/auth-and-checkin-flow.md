@@ -12,17 +12,31 @@ for it to survive a live event.
 anything** — the docs are explicit: *"This will not send links or OTPs to the
 end user."* It requires the service-role key, so it is server-only.
 
-That means we control delivery. We send through **Google Apps Script** from the
-`scu.edu` Workspace account rather than through Supabase's email service.
+That means we control delivery. We send through **Gmail SMTP** from the
+organizer's `scu.edu` account (`AUTH_LINK_SENDER=smtp`, `lib/auth/smtp.ts`,
+an App Password) rather than through Supabase's email service.
 
-**Why Apps Script rather than Resend/SES:**
+**Why Gmail SMTP from scu.edu:**
 
-- Workspace quota is **2,000 recipients/day within your own domain**, 1,500
-  outside. We need ~250.
+- **2,000 messages/day** per Workspace user (rolling 24 hours). We need
+  ~250 at check-in. Gmail doesn't expose how many are left.
+- An established domain, the same one most recipients are on. Verified in
+  the dry run: messages landed in the Inbox (not Spam or Promotions) at a
+  personal Gmail address, which filters harder than scu.edu does internally.
 - No SMTP provider, no DNS records, no domain warmup, no monthly cost.
 - Supabase's email rate limits stop applying — we never use its sender.
-- `scu.edu` → `scu.edu` deliverability is about as good as email gets.
-- ACM already runs this exact pipeline for AWS credentials. Proven, not new.
+
+Gmail rewrites From to the account, so recipients see **"SCU ACM
+<account>"** (`SMTP_FROM_NAME`), and Reply-To is the club address. The
+templates are the Apps Script relay's, ported line for line
+(`lib/auth/templates.ts`) and held byte-identical to `apps-script/Code.gs`
+by a test. The Apps Script relay remains a documented alternative sender
+(`AUTH_LINK_SENDER=appsScript`), but a Workspace on its free trial caps it at
+100 recipients/day.
+
+**There is no fallback sender, by decision.** If email fails, the fallback
+is the join code: on screen at check-in, in every email, and readable by
+organizers. It needs no account and no inbox, and it is tested.
 
 **The limits we're routing around** (for the record, so nobody re-litigates
 this): Supabase's built-in sender is **2/hour project-wide** and a plan upgrade
@@ -44,7 +58,7 @@ On submit:
 
 1. The team, members, and track rows are created
 2. The **join code is shown on screen immediately**
-3. A link is minted per email and handed to Apps Script
+3. After the answer, a link is minted per email and sent over SMTP
 4. The captain gets a **receipt + sign-in link**; teammates get
    *"Abhinav invited you to join Team X"*
 
@@ -88,13 +102,24 @@ The join code on screen is what keeps them unblocked in the meantime.
   names every address already on a team, surfaced as "someone on your team
   has already checked in". A team name already checked in (any case) is
   refused by field.
-- Success redirects to `/t/<join code>` with the code shown large, plus what
-  was emailed. No member addresses are ever shown there.
-- Then a link is minted per person (creating their accounts, which links
-  `team_members.user_id`) and sent as one batch: the captain gets the
-  relay's `checkin` receipt, teammates get `invite` ("Riley added you to
-  Night Owls"). A send failure is reported on the page; the check-in
-  stands.
+- Success redirects to `/t/<join code>` with the code shown large and the
+  two URLs where it works (`<site>/t/<code>` and `<site>/t`). No member
+  addresses are ever shown there.
+- **The emails go out after the answer.** A link is minted per person
+  (creating their accounts, which links `team_members.user_id`) and sent as
+  one batch: the captain gets the `checkin` receipt, teammates get `invite`
+  ("Riley added you to Night Owls"). This runs behind `waitUntil`
+  (`@vercel/functions`), which keeps the function alive until it finishes.
+  Measured on Preview, sending first made a captain wait 4.8 s (12.4 s inside
+  a 70-request burst, before any email), long enough to tap again and be told
+  their own team "already checked in". Answering first: 1.5 s, and 4.1 s
+  under the burst; the emails land 5–12 s after the check-in.
+- **Send failures are visible to organizers.** A `checkin_emails` row (0012)
+  is written as `sending` before the answer, then `sent` or `failed` with the
+  addresses that got nothing. The organizer dashboard lists every team with
+  emails not sent, or still `sending` after 3 minutes (the background work
+  was cut short), with its join code. A successful resend or a corrected
+  address on the teammates page clears it. Captains can't read or write it.
 - Up to **6 people per team** (`MAX_TEAM_SIZE`: captain + 5). **Any email
   domain**: it's a multi-school event (sjsu.edu, berkeley.edu, stanford.edu,
   ucmerced.edu, gmail.com, icloud.com all appeared at H4H), so a domain
@@ -124,8 +149,16 @@ The join code on screen is what keeps them unblocked in the meantime.
   already exists. Correcting an address on the teammates page sets
   `user_id` to null with the new email, so the same trigger relinks it.
 - Not built, by decision: an organizer flag for a bounced captain email.
-  Apps Script can't see bounces, and the captain is standing at the
-  check-in desk; if no receipt arrives, they'll say so.
+  SMTP can't see bounces (Gmail accepts the message and bounces later), and
+  the captain is standing at the check-in desk; if no receipt arrives,
+  they'll say so. Bounces do arrive in the sending account's inbox, so
+  watching it during check-in shows typo'd addresses early.
+- Not built, by decision: a "schedule is published" email. Everyone holds a
+  session from check-in, the board announces it, and the announcement banner
+  covers the rest. Leaving it out also removes the only send that would have
+  been one large batch. The `schedule` template exists but nothing sends it.
+- Not built here, by decision: AWS credential distribution. ACM's existing
+  script still sends credentials; the `credentials` template is unused.
 
 ## Two sensitivity tiers
 
@@ -177,16 +210,15 @@ known incompatibility with the PKCE code-exchange flow
 (`supabase/auth-js#767`). The entire delivery path depends on that branch —
 do not simplify it away.
 
-**Apps Script deployment:** a Web App with `doPost`, protected by a shared
-secret **in the JSON body**. The server posts `{email, link, template,
+**Apps Script relay (alternative sender, not in use):** a Web App with
+`doPost`, protected by a shared secret **in the JSON body**. The server posts `{email, link, template,
 secret}`; the script compares `secret` and replies `{"ok": true}` once the mail
 is sent (anything else is treated as a failed send). The secret cannot go in a
 header: `doPost(e)` receives the body and query string but not the request
 headers, so a header secret could never be checked. Implemented in
 `lib/auth/senders.ts`.
-Execution caps at 6 minutes (30 on Workspace); 250 sends run ~50–125s so it
-fits, but chunk in batches of ~50 with progress recorded so a timeout is
-resumable rather than ambiguous.
+Execution caps at 6 minutes. A redeploy as a *new* deployment mints a new
+URL; always edit the existing deployment.
 
 ---
 
@@ -197,12 +229,12 @@ resumable rather than ambiguous.
 | **Link expired** (1h default, 24h max via Management API) | Callback detects `otp_expired` and offers one-click resend. Raise expiry to a few hours during the event. |
 | **Link already used** | Links are single-use, and expired, used and superseded links all fail the same way (`otp_expired`). Same resend path. Requesting a new link invalidates the old one for an address that already has an account. For an address that has **never signed in**, the original signup link and a later link can both be live until one of them is used; using either invalidates the other. (Harmless, since both went to the same inbox, and it means a check-in link keeps working after a resend.) |
 | **Two teammates both check in** | `enforce_one_team_per_event` already blocks it at the database. Surface it as *"someone on your team has already checked in"*, never a raw constraint violation. |
-| **Captain's email bounces** | That's why the captain gets a receipt, not just a link. No automated flag (Apps Script can't see bounces): the captain is at the desk and will say if nothing arrived. |
+| **Captain's email bounces** | That's why the captain gets a receipt, not just a link. No automated flag (SMTP can't see bounces): the captain is at the desk and will say if nothing arrived, and the bounce lands in the sending account's inbox. |
 | **Teammate email typo'd** | Invite never arrives. The captain corrects it and re-sends from `/team/members`. |
 | **Person already has an account** | `generateLink` signs them in rather than duplicating; the 0003 trigger links their roster row on insert. |
-| **Apps Script throttled or broken** | Keep an SMTP provider configured on the hosted project as a fallback route, so recovery isn't a code change at 9:30am. |
+| **Gmail refuses or throttles sends** | No fallback sender, by decision: give out join codes. Failures show on the organizer dashboard per team. |
 | **Nobody's email works** | Join code, shown on screen at check-in and reprintable by organizers. |
-| **Session lapsed before the schedule send** | Most people still hold a live session from check-in (refresh token persists), so later emails are notifications, not fresh logins. |
+| **Session lapsed by judging day** | There is no schedule email (by decision). Most people still hold a live session from check-in (the refresh token persists); anyone else signs in again from `/login` or uses the join code. |
 
 ---
 
