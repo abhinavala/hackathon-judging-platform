@@ -63,9 +63,7 @@ export function TeamViewClient({
   fetchedAt: number | null;
   welcome?: {
     site: string;
-    receiptSent: boolean;
     invited: number;
-    inviteFailures: number;
   } | null;
 }) {
   const [live, setLive] = useState<Saved | null>(
@@ -366,17 +364,12 @@ export function TeamViewClient({
 function Welcome({
   code,
   site,
-  receiptSent,
   invited,
-  inviteFailures,
 }: {
   code: string;
   site: string;
-  receiptSent: boolean;
   invited: number;
-  inviteFailures: number;
 }) {
-  const invitedOk = invited - inviteFailures;
   return (
     <section
       role="status"
@@ -396,20 +389,14 @@ function Welcome({
         </Link>{" "}
         and enter the code.
       </p>
-      <ul className="mt-3 list-disc space-y-1 pl-5">
-        <li>
-          {receiptSent
-            ? "We emailed you a receipt and a sign-in link."
-            : "We couldn't email you a receipt right now. Your check-in is saved; the code above is all you need."}
-        </li>
-        {invited > 0 && (
-          <li>
-            {inviteFailures === 0
-              ? `We emailed ${invited} teammate${invited === 1 ? "" : "s"} an invitation to join.`
-              : `${invitedOk} of ${invited} teammate invitations went out. Share the code and ${site}/t with the others.`}
-          </li>
-        )}
-      </ul>
+      <p className="mt-3">
+        We&apos;re emailing you a receipt and a sign-in link
+        {invited > 0
+          ? `, and an invitation to ${invited === 1 ? "your teammate" : `your ${invited} teammates`}`
+          : ""}
+        . If anything hasn&apos;t arrived in a few minutes, share the code and{" "}
+        {site}/t: that&apos;s all anyone needs.
+      </p>
     </section>
   );
 }

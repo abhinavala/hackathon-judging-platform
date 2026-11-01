@@ -1561,10 +1561,39 @@ async function run() {
     "check-in: the join code is on screen at once",
   );
   check(
-    welcomePage.includes(
-      "We couldn't email you a receipt right now. Your check-in is saved",
-    ) && !welcomePage.includes("riley.park"),
-    "check-in: with no working sender it says so, the check-in stands, and no address is shown",
+    welcomePage.includes("We're emailing you a receipt and a sign-in link") &&
+      welcomePage.includes("/t/" + newCode) &&
+      !welcomePage.includes("riley.park"),
+    "check-in: answers before sending, says where the code works, and shows no address",
+  );
+  // The emails go out after the answer (waitUntil). Here the sender refuses
+  // under next start, so the outcome must be recorded as failed, for every
+  // address, and shown to organizers: never lost silently.
+  let delivery = null;
+  for (let i = 0; i < 40; i++) {
+    const { data } = await db
+      .from("checkin_emails")
+      .select("status, failed, error, teams!inner(join_code)")
+      .eq("teams.join_code", newCode)
+      .maybeSingle();
+    delivery = data;
+    if (data && data.status !== "sending") break;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  check(
+    delivery?.status === "failed" &&
+      delivery.failed.includes("riley.park@scu.example") &&
+      delivery.failed.length === 3 &&
+      /disabled in production/.test(delivery.error ?? ""),
+    "check-in: a background send failure is recorded per address with the reason",
+    JSON.stringify(delivery),
+  );
+  const orgHome = text((await get("/organizer", org.cookie)).html);
+  check(
+    orgHome.includes("Check-in emails not sent") &&
+      orgHome.includes(newCode) &&
+      orgHome.includes("riley.park@scu.example"),
+    "check-in: and organizers see it on the dashboard, with the join code",
   );
   const { data: owls } = await db
     .from("teams")

@@ -53,9 +53,7 @@ function reply(
   const to = result.ok
     ? `/t/${result.joinCode}?${new URLSearchParams({
         welcome: "1",
-        receipt: result.receiptSent ? "sent" : "failed",
         invited: String(result.invited),
-        inviteFailures: String(result.inviteFailures),
       })}`
     : `/checkin?${new URLSearchParams({
         error: result.errors.form ?? Object.values(result.errors)[0],

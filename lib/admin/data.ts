@@ -162,6 +162,54 @@ export async function loadTracks(db: Db, eventId: string) {
   );
 }
 
+/** A send still "sending" after this long was cut short. */
+const EMAILS_STUCK_MS = 3 * 60_000;
+
+export type CheckinEmails = {
+  teamName: string;
+  joinCode: string;
+  status: "sending" | "sent" | "failed";
+  /** "sending" for longer than a send takes: the background work died. */
+  stuck: boolean;
+  failed: string[];
+  error: string | null;
+  updatedAt: string;
+};
+
+/**
+ * What happened to each team's check-in emails (checkin_emails, 0012). They
+ * go out after the captain is answered, so this is the only place a failure
+ * there shows up.
+ */
+export async function loadCheckinEmails(
+  db: Db,
+  eventId: string,
+): Promise<CheckinEmails[]> {
+  const rows = must(
+    await db
+      .from("checkin_emails")
+      .select(
+        "status, failed, error, updated_at, teams!inner(name, join_code, event_id)",
+      )
+      .eq("teams.event_id", eventId),
+    "checkin_emails",
+  );
+  const now = Date.now();
+  return rows
+    .map((r) => ({
+      teamName: r.teams.name,
+      joinCode: r.teams.join_code,
+      status: r.status as CheckinEmails["status"],
+      stuck:
+        r.status === "sending" &&
+        now - Date.parse(r.updated_at) > EMAILS_STUCK_MS,
+      failed: r.failed,
+      error: r.error,
+      updatedAt: r.updated_at,
+    }))
+    .sort((a, b) => a.teamName.localeCompare(b.teamName));
+}
+
 export async function loadTeams(db: Db, eventId: string): Promise<Team[]> {
   const [teams, tracks] = await Promise.all([
     db

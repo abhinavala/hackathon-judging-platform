@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { normalizeEmail } from "@/lib/auth/email";
 import { mintSignInLink } from "@/lib/auth/magic-link";
 import { getLinkSender, sendAll } from "@/lib/auth/senders";
+import { clearDeliveryFailures } from "@/lib/checkin/delivery";
 import { MAX_TEAM_SIZE } from "@/lib/checkin/form";
 import { allow, LIMITS } from "@/lib/rate-limit";
 import {
@@ -58,6 +59,8 @@ async function invite(team: MyTeam, email: string): Promise<string> {
       },
     ]);
     if (failed.length) throw new Error(failed[0].error);
+    // Delivered now: off the organizers' "not sent" list.
+    await clearDeliveryFailures(team.id, [email]);
     return `Invitation emailed to ${email}.`;
   } catch (e) {
     console.error(
@@ -101,8 +104,10 @@ export async function correctEmail(form: FormData) {
         ? `${next} is already on another team that has checked in.`
         : `Not changed: ${error.message}`,
     });
-  // The typo'd address's account and live link go away.
+  // The typo'd address's account and live link go away, and so does any
+  // failure recorded against it: that address is no longer on the team.
   if (member.userId) await deleteUnusedAccount(member.userId);
+  await clearDeliveryFailures(team.id, [old]);
   const sent = await invite(team, next);
   revalidatePath(PATH);
   back({ ok: `Changed ${old} to ${next}. ${sent}` });

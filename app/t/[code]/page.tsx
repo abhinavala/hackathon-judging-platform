@@ -42,9 +42,7 @@ export default async function TeamPage({
               // Where the code works, written out: SITE_URL in production,
               // the deployment's own URL on a preview.
               site: siteUrl(),
-              receiptSent: query.receipt === "sent",
               invited: Number(query.invited) || 0,
-              inviteFailures: Number(query.inviteFailures) || 0,
             }
           : null
       }
