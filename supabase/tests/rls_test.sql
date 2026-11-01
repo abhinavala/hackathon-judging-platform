@@ -538,5 +538,55 @@ begin
   reset role;
 end $$;
 
+-- ---- 0012: check-in email status -------------------------------------------
+-- Written by the service role only; organizers read it; a captain can
+-- neither read their own row nor clear their own failure.
+do $$
+declare
+  n int; ok boolean;
+  alpha constant uuid := 'a0000000-0000-0000-0000-000000000001';
+begin
+  insert into public.checkin_emails (team_id, status, failed, error)
+  values (alpha, 'failed', array['typo@scu.edu'], 'SMTP did not accept');
+
+  perform become('55555555-5555-5555-5555-555555555555');
+  select count(*) into n from public.checkin_emails;
+  perform test_assert(n = 1, '0012: an organizer can read check-in email status');
+  update public.checkin_emails set status = 'sent', failed = '{}' where team_id = alpha;
+  get diagnostics n = row_count;
+  perform test_assert(n = 0, '0012: an organizer cannot rewrite it (only the service role writes)');
+  reset role;
+
+  perform become('11111111-1111-1111-1111-111111111111');
+  select count(*) into n from public.checkin_emails;
+  perform test_assert(n = 0, '0012: a captain cannot read their team''s email status');
+  update public.checkin_emails set status = 'sent', failed = '{}' where team_id = alpha;
+  get diagnostics n = row_count;
+  perform test_assert(n = 0, '0012: a captain cannot clear their own failure');
+  begin
+    insert into public.checkin_emails (team_id, status) values
+      ('a0000000-0000-0000-0000-000000000002', 'sent');
+    ok := false;
+  exception when insufficient_privilege then ok := true;
+  end;
+  perform test_assert(ok, '0012: a captain cannot insert a status row');
+  reset role;
+
+  perform become('33333333-3333-3333-3333-333333333333');
+  select count(*) into n from public.checkin_emails;
+  perform test_assert(n = 0, '0012: a judge cannot read it');
+  reset role;
+
+  perform become_anon();
+  select count(*) into n from public.checkin_emails;
+  perform test_assert(n = 0, '0012: anonymous visitors cannot read it');
+  reset role;
+
+  select status = 'failed' and failed = array['typo@scu.edu'] into ok
+    from public.checkin_emails where team_id = alpha;
+  perform test_assert(ok, '0012: and the row is exactly as the service role left it');
+  delete from public.checkin_emails;
+end $$;
+
 \echo ''
 \echo '================= ALL PHASE 1 ACCEPTANCE TESTS PASSED ================='
