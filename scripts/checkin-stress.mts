@@ -13,6 +13,8 @@
 //
 // Options:
 //   --size N        people per team, captain included (default 4)
+//   --pace S        start one check-in every S seconds instead of all at
+//                   once (real sends without a burst); use with --pairs 0
 //   --open-checkin  if the event's check-in hasn't opened, open it for the
 //                   run and put the old time back afterwards
 //   --cleanup RUN   delete the teams a previous run created, and stop
@@ -93,8 +95,7 @@ type Reply = {
   status: number;
   ms: number;
   ok: boolean;
-  receipt?: string;
-  inviteFailures?: number;
+  joinCode?: string;
   error?: string;
 };
 
@@ -138,6 +139,8 @@ async function main() {
   const teams = Number(flag("teams") ?? 60);
   const pairs = Number(flag("pairs") ?? 10);
   const size = Number(flag("size") ?? 4);
+  const paceMs = Number(flag("pace") ?? 0) * 1000;
+  if (paceMs && pairs) fail("--pace is for real sends: use it with --pairs 0");
   if (teams + pairs > 90)
     fail("teams + pairs must stay under the 90-a-minute per-IP limit");
   if (pairs > teams) fail("--pairs can't exceed --teams");
@@ -231,13 +234,11 @@ async function main() {
       errors?: Record<string, string>;
     } | null;
     if (body?.ok && body.redirect) {
-      const q = new URL(body.redirect, base).searchParams;
       return {
         status: res.status,
         ms: elapsed,
         ok: true,
-        receipt: q.get("receipt") ?? undefined,
-        inviteFailures: Number(q.get("inviteFailures") ?? 0),
+        joinCode: new URL(body.redirect, base).pathname.split("/")[2],
       };
     }
     return {
@@ -261,8 +262,16 @@ async function main() {
       .sort((a, b) => (a % teams) - (b % teams) || a - b);
     replies = new Array(subs.length);
     await Promise.all(
-      order.map(async (i) => {
+      order.map(async (i, k) => {
+        if (paceMs) await new Promise((r) => setTimeout(r, k * paceMs));
         replies[i] = await submit(subs[i]);
+        if (paceMs)
+          console.log(
+            `  ${subs[i].label}: ${replies[i].status} in ${ms(replies[i].ms)}` +
+              (replies[i].ok
+                ? `, ${replies[i].joinCode}`
+                : `, ${replies[i].error}`),
+          );
       }),
     );
   } finally {
@@ -323,8 +332,41 @@ async function main() {
     (r) => !/already checked in|already on a team/.test(r.error ?? ""),
   );
   const lat = replies.map((r) => r.ms);
-  const receiptsFailed = oks.filter((r) => r.receipt !== "sent").length;
-  const invitesFailed = oks.reduce((n, r) => n + (r.inviteFailures ?? 0), 0);
+  // Emails go out after the answer: wait for every team's checkin_emails
+  // row to leave "sending" (or give up after two minutes and say so).
+  type Delivery = {
+    status: string;
+    failed: string[];
+    error: string | null;
+    updated_at: string;
+    teams: { checked_in_at: string | null };
+  };
+  let deliveries: Delivery[] = [];
+  const waitStart = Date.now();
+  while (Date.now() - waitStart < 120_000) {
+    const { data, error: dErr } = await db
+      .from("checkin_emails")
+      .select(
+        "status, failed, error, updated_at, teams!inner(name, checked_in_at)",
+      )
+      .like("teams.name", `Stress ${run} %`);
+    if (dErr) fail(dErr.message);
+    deliveries = data as unknown as Delivery[];
+    if (
+      deliveries.length >= oks.length &&
+      !deliveries.some((d) => d.status === "sending")
+    )
+      break;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  const stillSending = deliveries.filter((d) => d.status === "sending").length;
+  const emailsFailed = deliveries.reduce((n, d) => n + d.failed.length, 0);
+  const lag = deliveries
+    .filter((d) => d.status !== "sending" && d.teams.checked_in_at)
+    .map((d) => Date.parse(d.updated_at) - Date.parse(d.teams.checked_in_at!));
+  const firstErrors = [
+    ...new Set(deliveries.map((d) => d.error).filter(Boolean)),
+  ];
   const statuses = new Map<number, number>();
   for (const r of replies)
     statuses.set(r.status, (statuses.get(r.status) ?? 0) + 1);
@@ -335,7 +377,8 @@ Result (run ${run})
   latency         p50 ${ms(pct(lat, 0.5))}, p95 ${ms(pct(lat, 0.95))}, max ${ms(Math.max(...lat))}
   statuses        ${[...statuses].map(([k, v]) => `${k}: ${v}`).join(", ")}
   checked in      ${oks.length} (expected ${teams}); refused as duplicates ${lost.length - otherErrors.length} (expected ${pairs})
-  emails          receipts not sent ${receiptsFailed} of ${oks.length}; invites not sent ${invitesFailed} of ${oks.length * (size - 1)}
+  emails          ${deliveries.length} teams recorded: ${deliveries.filter((d) => d.status === "sent").length} all sent, ${deliveries.filter((d) => d.status === "failed").length} with failures, ${stillSending} still "sending"; ${emailsFailed} of ${oks.length * size} addresses not sent
+  delivered after check-in  ${lag.length ? `p50 ${ms(pct(lag, 0.5))}, max ${ms(Math.max(...lag))}` : "n/a"}${firstErrors.length ? `\n  email errors    ${JSON.stringify(firstErrors.slice(0, 3))}` : ""}
   database        ${rows.length} teams, ${memberTeams.size} people`);
   if (otherErrors.length)
     console.log(
@@ -348,7 +391,7 @@ Result (run ${run})
   console.log(
     `  integrity       OK\n\nClean up with: npm run stress:checkin -- ${local ? "--local" : `--project-ref ${ref}`} --cleanup ${run}`,
   );
-  if (otherErrors.length || receiptsFailed || invitesFailed) process.exit(1);
+  if (otherErrors.length || emailsFailed || stillSending) process.exit(1);
 }
 
 main().catch((e) => fail(e instanceof Error ? e.message : String(e)));
