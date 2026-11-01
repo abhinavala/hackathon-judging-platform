@@ -4,25 +4,27 @@ Operational steps for the week of the AWS x A10 Hack (Saturday-Sunday,
 November 7-8, 2026). Deploy-time settings are in
 [deploy-checklist.md](deploy-checklist.md).
 
-## Preview deploy freeze from Thursday, November 5
+## Preview deploys are safe during event week
 
-Preview deployments must never write to real event data. If Preview has its
-own Supabase project (deploy-checklist.md), this section is a no-op. If it
-does not, previews share the production database, which only matters once
-production holds real data, so: **no preview deploys from Thursday,
-November 5 until after the event.** It costs nothing and covers us if the
-second project isn't ready.
+Preview has its own Supabase project (`tcauglluxdmqselpsqjl`), separate from
+production, so a preview deploy can't write to real event data and no deploy
+freeze is needed. If Preview's variables ever point at the production
+project again, stop preview deploys from November 5 until after the event:
+remove the Preview-scoped Supabase variables in Vercel, or set Project
+Settings, Git, Ignored Build Step to `[ "$VERCEL_ENV" != "production" ]`.
 
-- [ ] **By November 5,** if Preview still points at the production project,
-      remove the Preview-scoped Supabase variables in Vercel
-      (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
-      `SUPABASE_SERVICE_ROLE_KEY`). A preview without them cannot reach any
-      database at all, which is the hard guarantee.
-- [ ] Optionally also stop previews building: Project Settings, Git,
-      Ignored Build Step, command
-      `[ "$VERCEL_ENV" != "production" ]` (exit 0 skips the build). Merges to
-      `main` still deploy to production.
-- [ ] Undo both after the event (or once Preview has its own project).
+## Check-in morning: email
+
+- [ ] Captains get their join code on screen at once; the receipt and
+      invitations follow within seconds. The organizer dashboard's **Check-in
+      emails** row counts teams sent, sending and failed, and a **Check-in
+      emails not sent** section lists each failed team with its join code
+      and the addresses that got nothing. Glance at it every few minutes.
+- [ ] Watch the sending account's inbox: Gmail accepts every message and
+      bounces bad addresses later, so a typo'd address shows up there as a
+      bounce. The captain fixes it on `/team/members`.
+- [ ] Don't run `stress:checkin` or a dry run on Friday or Saturday: every
+      test send counts against the account's 2,000/day (rolling 24 hours).
 
 ## Generate the real schedule with slack
 
@@ -95,6 +97,7 @@ work too if `pg_dump` isn't installed locally.
 - [ ] **After check-in closes (Saturday):** dump. This captures every team,
       member and track selection, the data that is hardest to re-collect.
 - [ ] **After the schedule is published (Sunday, before judging):** dump.
-- [ ] **After judging:** dump, so scores survive anything that happens next.
+- [ ] **After judging:** dump, so the final state survives anything that
+      happens next.
 - [ ] Store dumps outside the laptop that took them (they contain participant
       emails and phone numbers; keep them private).

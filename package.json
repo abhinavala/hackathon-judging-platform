@@ -16,7 +16,8 @@
     "db:types": "supabase gen types typescript --local > lib/database.types.ts",
     "seed": "node --env-file-if-exists=.env.local scripts/seed.mts",
     "bootstrap:event": "node --env-file-if-exists=.env.local scripts/bootstrap-event.mts",
-    "mail:dry-run": "node scripts/mail-dry-run.mts",
+    "stress:checkin": "node --env-file-if-exists=.env.local scripts/checkin-stress.mts",
+    "mail:dry-run": "node --env-file-if-exists=.env.relay scripts/mail-dry-run.mts",
     "test:rls": "node scripts/test-rls.mjs",
     "test:smoke": "next build && node --env-file-if-exists=.env.local scripts/smoke.mjs",
     "test:scheduler": "node --test \"tests/scheduler/*.test.ts\"",
@@ -26,13 +27,16 @@
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
+    "@vercel/functions": "^3.10.5",
     "next": "16.4.2",
+    "nodemailer": "^10.3.1",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

@@ -40,15 +40,20 @@ export function siteUrl(): string {
   return "http://127.0.0.1:3000";
 }
 
-export type LinkSenderName = "console" | "mailpit" | "appsScript";
+export type LinkSenderName = "console" | "mailpit" | "smtp" | "appsScript";
 
 export function linkSenderName(): LinkSenderName {
   const value = process.env.AUTH_LINK_SENDER ?? (isProduction ? "" : "console");
-  if (value === "console" || value === "mailpit" || value === "appsScript") {
+  if (
+    value === "console" ||
+    value === "mailpit" ||
+    value === "smtp" ||
+    value === "appsScript"
+  ) {
     return value;
   }
   throw new Error(
-    `AUTH_LINK_SENDER must be console, mailpit or appsScript (got "${value}")`,
+    `AUTH_LINK_SENDER must be console, mailpit, smtp or appsScript (got "${value}")`,
   );
 }
 

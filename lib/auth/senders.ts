@@ -1,6 +1,7 @@
 import "server-only";
 import { SUPABASE_URL } from "@/lib/env";
 import { callRelay, type LinkMessage } from "@/lib/auth/relay";
+import { createSmtpTransport, sendSmtp, smtpConfigFrom } from "@/lib/auth/smtp";
 import {
   parseInboxes,
   redirectMessage,
@@ -62,6 +63,7 @@ export function getLinkSender(): LinkSender {
   const sender = {
     console: consoleSender,
     mailpit: mailpitSender,
+    smtp: smtpSender,
     appsScript: appsScriptSender,
   }[linkSenderName()];
   const inboxes = parseInboxes(linkRedirectInboxes());
@@ -126,8 +128,53 @@ const mailpitSender: LinkSender = {
   },
 };
 
-// Production: a Google Apps Script web app that sends from the scu.edu
-// Workspace account. See docs/auth-and-checkin-flow.md.
+// Production: Gmail SMTP from the organizer's scu.edu account with an App
+// Password (2,000 messages/day, an established domain, and the same domain as
+// most recipients). Templates and From/Reply-To are in lib/auth/smtp.ts.
+// A batch (a check-in's receipt and invites) shares one connection and sends
+// in order; each address succeeds or fails on its own.
+// SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD (an App Password),
+// SMTP_FROM_NAME, SMTP_REPLY_TO. All server-only; read per send.
+const smtpConfig = () => smtpConfigFrom(process.env);
+
+const smtpSender: LinkSender & {
+  batch: (m: LinkMessage[]) => Promise<BatchOutcome>;
+} = {
+  async batch(messages) {
+    const config = smtpConfig();
+    const transport = createSmtpTransport(config, { pool: true });
+    const failed: BatchOutcome["failed"] = [];
+    try {
+      for (const m of messages) {
+        try {
+          await sendSmtp(transport, config, m);
+        } catch (e) {
+          failed.push({
+            email: m.email,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+    } finally {
+      transport.close();
+    }
+    return { failed };
+  },
+  async send(message) {
+    const config = smtpConfig();
+    const transport = createSmtpTransport(config);
+    try {
+      await sendSmtp(transport, config, message);
+    } finally {
+      transport.close();
+    }
+  },
+};
+
+// Alternative, not in use: a Google Apps Script web app (apps-script/Code.gs)
+// sending from a Workspace account. Kept working in case SMTP is ever
+// unavailable, but a Workspace on its free trial caps Apps Script at 100
+// recipients/day, far short of an event. See docs/auth-and-checkin-flow.md.
 //
 // The wire format and the secret-in-the-body rule are in lib/auth/relay.ts.
 // The templates read `data` (team name, join code); without it they fall

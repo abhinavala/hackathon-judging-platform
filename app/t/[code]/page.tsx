@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { loadTeamView } from "@/lib/team/load";
 import { normalizeCode, type TeamView } from "@/lib/team/view";
+import { siteUrl } from "@/lib/server-env";
 import { TeamViewClient } from "./team-view";
 
 // Renders on the server first (so the times show even if JavaScript never
@@ -38,9 +39,10 @@ export default async function TeamPage({
         // anyone can add these parameters, and nothing in them is private.
         query.welcome === "1"
           ? {
-              receiptSent: query.receipt === "sent",
+              // Where the code works, written out: SITE_URL in production,
+              // the deployment's own URL on a preview.
+              site: siteUrl(),
               invited: Number(query.invited) || 0,
-              inviteFailures: Number(query.inviteFailures) || 0,
             }
           : null
       }

@@ -1,8 +1,10 @@
 import "server-only";
+import { waitUntil } from "@vercel/functions";
 import { newJoinCode } from "@/lib/admin/join-code";
 import { mintSignInLink } from "@/lib/auth/magic-link";
 import { getLinkSender, sendAll } from "@/lib/auth/senders";
 import type { LinkMessage } from "@/lib/auth/relay";
+import { finishDelivery, startDelivery } from "@/lib/checkin/delivery";
 import { helpPlace } from "@/lib/event/copy";
 import { clockWithZone, dayLabel } from "@/lib/team/view";
 import { serviceClient } from "@/lib/supabase/service";
@@ -28,10 +30,8 @@ export type CheckInResult =
   | {
       ok: true;
       joinCode: string;
-      /** false if the receipt couldn't be sent (the check-in still stands). */
-      receiptSent: boolean;
+      /** How many teammates are being emailed an invitation. */
       invited: number;
-      inviteFailures: number;
     }
   | { ok: false; errors: FieldErrors };
 
@@ -72,12 +72,15 @@ export async function loadCheckInEvent(): Promise<CheckInEvent | null> {
 }
 
 /**
- * Validates the form, checks the team in (check_in_team(), one transaction,
- * service role), then mints a link per person and sends the captain's
- * receipt and the teammates' invitations. In that order on purpose: the
- * durable work happens before the fragile step, so an email failure costs
- * someone a link, never the team its check-in. The join code is the
- * fallback, and the page shows it at once.
+ * Validates the form and checks the team in (check_in_team(), one
+ * transaction, service role), then answers. Minting a link per person and
+ * sending the captain's receipt and the teammates' invitations happen after
+ * the response, kept alive by waitUntil: with sixty captains at once they
+ * took 5 to 12 seconds, and a captain who taps again in that time is told
+ * their team "already checked in". The durable work still comes first, so an
+ * email failure costs someone a link, never the team its check-in; the join
+ * code is on screen at once; and what happened to the emails is recorded in
+ * checkin_emails for organizers (lib/checkin/delivery.ts).
  */
 export async function submitCheckIn(
   fields: FormFields,
@@ -190,13 +193,51 @@ export async function submitCheckIn(
     return { ok: false, errors };
   }
 
-  // Checked in. Everything below is best effort.
+  // Checked in. Everything below is best effort, and none of it delays
+  // the answer.
+  const teamId = String(reply.team_id);
   const people = [
     { email: c.captain.email, captain: true },
     ...c.teammates.map((t) => ({ email: t.email, captain: false })),
   ];
+  const data = {
+    teamName: c.teamName,
+    joinCode,
+    captainName: c.captain.name,
+    invitedCount: c.teammates.length,
+  };
+  try {
+    // Written before answering: if the background work is cut short, the
+    // row stays "sending" and organizers can see it.
+    await startDelivery(teamId);
+  } catch (e) {
+    // The record is bookkeeping: the emails still go out without it.
+    console.error(
+      `[checkin] couldn't record that emails are sending: ${e instanceof Error ? e.message : e}`,
+    );
+  }
+  waitUntil(deliverCheckInEmails(teamId, people, data));
+  return { ok: true, joinCode, invited: c.teammates.length };
+}
+
+/** Mints and sends the receipt and invitations, then records the outcome. */
+async function deliverCheckInEmails(
+  teamId: string,
+  people: { email: string; captain: boolean }[],
+  d: {
+    teamName: string;
+    joinCode: string;
+    captainName: string;
+    invitedCount: number;
+  },
+): Promise<void> {
   const messages: LinkMessage[] = [];
-  const mintFailed = new Set<string>();
+  const failed = new Set<string>();
+  let firstError: string | null = null;
+  const note = (email: string, e: unknown) => {
+    failed.add(email);
+    firstError ??= e instanceof Error ? e.message : String(e);
+  };
   for (const p of people) {
     try {
       // Creates the account (and links team_members.user_id by email).
@@ -206,34 +247,37 @@ export async function submitCheckIn(
         link,
         template: p.captain ? "checkin" : "invite",
         data: p.captain
-          ? { teamName: c.teamName, joinCode, invitedCount: c.teammates.length }
-          : { teamName: c.teamName, joinCode, inviterName: c.captain.name },
+          ? {
+              teamName: d.teamName,
+              joinCode: d.joinCode,
+              invitedCount: d.invitedCount,
+            }
+          : {
+              teamName: d.teamName,
+              joinCode: d.joinCode,
+              inviterName: d.captainName,
+            },
       });
     } catch (e) {
-      mintFailed.add(p.email);
-      console.error(
-        `[checkin] couldn't mint a link: ${e instanceof Error ? e.message : e}`,
-      );
+      note(p.email, e);
     }
   }
-  let failed = new Set(mintFailed);
   try {
     const outcome = await sendAll(getLinkSender(), messages);
-    for (const f of outcome.failed) failed.add(f.email);
-    if (outcome.failed.length)
-      console.error(
-        `[checkin] ${outcome.failed.length} email(s) not sent: ${outcome.failed[0].error}`,
-      );
+    for (const f of outcome.failed) note(f.email, f.error);
   } catch (e) {
     // A misconfigured sender: nothing went out.
-    failed = new Set(people.map((p) => p.email));
-    console.error(`[checkin] no sender: ${e instanceof Error ? e.message : e}`);
+    for (const p of people) note(p.email, e);
   }
-  return {
-    ok: true,
-    joinCode,
-    receiptSent: !failed.has(c.captain.email),
-    invited: c.teammates.length,
-    inviteFailures: c.teammates.filter((t) => failed.has(t.email)).length,
-  };
+  if (failed.size)
+    console.error(
+      `[checkin] ${failed.size} email(s) not sent for team ${teamId}: ${firstError}`,
+    );
+  try {
+    await finishDelivery(teamId, [...failed], firstError);
+  } catch (e) {
+    console.error(
+      `[checkin] couldn't record email status: ${e instanceof Error ? e.message : e}`,
+    );
+  }
 }

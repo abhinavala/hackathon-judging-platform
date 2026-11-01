@@ -20,8 +20,9 @@ They replace `gujdsezfxjwhpatzqqgj` entirely.
       disaster during event week. Vercel's Production variables point at
       `jgetndieacanzhrzmyiz`, its Preview variables at `tcauglluxdmqselpsqjl`,
       and 0001-0003 are pushed to both (done and verified 2026-10-25: 14
-      tables each, anon read [] and anon insert 401). If that ever stops being true, the
-      freeze in event-week-runbook.md applies from November 5.
+      tables each, anon read [] and anon insert 401). Both are now at
+      0001-0012. If they ever share a database again, the freeze in
+      event-week-runbook.md applies from November 5.
 - [ ] **Never call anything that makes Supabase send email.** Supabase's
       built-in mailer is locked at **2 emails/hour** per project and cannot be
       raised without custom SMTP; with 250 people checking in at once, any
@@ -45,7 +46,7 @@ They replace `gujdsezfxjwhpatzqqgj` entirely.
       `signup_disabled`. **Do NOT disable the Email provider instead**
       (`[auth.email] enable_signup` locally): that also blocks
       `signInWithOtp()` for existing users ("Email logins are disabled"),
-      which would break the fallback-SMTP route.
+      which would break sign-in for existing users.
 - [ ] **Email OTP length is 8 digits** on both projects (Supabase's default),
       not 6. We send `token_hash` links, not typed codes, so nothing reads it
       today; any future code-entry UI must accept 8 digits. (Local
@@ -73,8 +74,10 @@ email_sent = 1000`. Production doesn't send through Supabase's mailer.
       emails; a session persists by refresh token once created, so this only
       bounds time-to-first-click. Raise to 8 hours during the event if resends
       get annoying, no further (AWS credentials sit behind the session).
-- [ ] **Fallback SMTP provider** configured, so Apps Script failing isn't a
-      code change at 9:30am (docs/auth-and-checkin-flow.md).
+- [x] **No fallback sender, by decision.** Email goes out through Gmail SMTP
+      from the app, never through Supabase, so an SMTP setting on Supabase
+      would change nothing. If email fails, the join code is the fallback
+      (docs/auth-and-checkin-flow.md).
 
 ## Vercel environment
 
@@ -100,20 +103,24 @@ email_sent = 1000`. Production doesn't send through Supabase's mailer.
 - [ ] **Production branch is `main`.** A brand-new Vercel project promotes its
       first deployment to production whatever the branch: here PR #1's
       `phase-1` build became production. The next merge to `main` replaces it.
-- [ ] `AUTH_LINK_SENDER=appsScript` for production once the Apps Script web
-      app exists. The `console` and `mailpit` senders refuse to run in
-      production; unset also fails. Until then, production renders `/login`
-      and fails cleanly on send ("We couldn't send your sign-in link").
-- [ ] **Exercise production with `AUTH_LINK_SENDER` unset, for real.** This
+- [x] `AUTH_LINK_SENDER=smtp` and the six `SMTP_*` variables on
+      Production, `SMTP_PASSWORD` stored as Sensitive (set 2026-10-31,
+      piped from `.env.relay`, never printed). The `console` and `mailpit`
+      senders refuse to run in production builds, **including Vercel
+      previews**; unset also fails, cleanly ("We couldn't send your sign-in
+      link").
+- [x] **Exercise production with `AUTH_LINK_SENDER` unset, for real.**
+      Done 2026-10-31 on the production URL: the no-JavaScript form
+      redirected to `/login?error=send-failed` and the rendered page said so. This
       guard is what stops sign-in links leaking into production logs, and
       locally `next start` always loads `.env.local`, which sets the sender.
       On a Vercel preview with the variable unset: request a link, confirm
       the form reports a failure, and confirm no link and no `[auth] ... link
       minted` line appears in the logs (the sender is resolved before
       minting).
-- [ ] `APPS_SCRIPT_URL` and `APPS_SCRIPT_SECRET` set when the script exists
-      (server-only, no `NEXT_PUBLIC_` prefix). The script compares `secret`
-      from the JSON body and replies `{ "ok": true }`.
+- [ ] **Revoke the App Password after the event.** It gives full access to
+      the sending account's mailbox (Google Account, Security, App
+      passwords), and remove `SMTP_PASSWORD` from Vercel.
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` set (server-only). `grep -r service_role
 app/` still returns nothing.
 
@@ -128,30 +135,40 @@ test:rls` at production.** `test:smoke` (creates `smoke-*@example.test`
       read `.env.local`, so keep hosted credentials out of it; pass a
       hosted URL and key in the environment for the one command.
 
-## Mail relay (Apps Script)
+## Email (Gmail SMTP)
 
-- [ ] `apps-script/Code.gs` deployed as a web app (Execute as: Me, Who has
-      access: Anyone), `SHARED_SECRET` set in Script Properties. After any
-      change, bump `RELAY_VERSION` and redeploy.
-- [ ] Health check without sending: `APPS_SCRIPT_URL=... APPS_SCRIPT_SECRET=...
-npm run mail:dry-run -- --ping` prints the relay version and remaining
-      daily quota.
-- [ ] Production: `AUTH_LINK_SENDER=appsScript`, `APPS_SCRIPT_URL`,
-      `APPS_SCRIPT_SECRET` (server-only). Preview stays on `console`, which
-      refuses to send on a deployment (it would write live links into
-      Vercel's logs), so signing in on a preview fails visibly.
+- [x] SMTP settings live in `.env.relay` (gitignored). Health check without
+      sending: `npm run mail:dry-run -- --ping` logs in over TLS and prints
+      the account and display name. It can't report remaining quota: Gmail
+      doesn't expose it (2,000/day, rolling).
+- [x] Preview (`smtp-sender` branch scope): `AUTH_LINK_SENDER=smtp` with
+      `AUTH_LINK_REDIRECT_TO` set to the test inboxes, so every link goes to
+      a test inbox. Switch it to `console` for a burst test that must send
+      nothing; env changes need a redeploy.
+- [ ] Apps Script (`apps-script/Code.gs`) is the alternative sender
+      (`AUTH_LINK_SENDER=appsScript`, `APPS_SCRIPT_URL`,
+      `APPS_SCRIPT_SECRET`); not deployed. Capped at 100/day on a trial
+      Workspace. If it is ever used: Execute as Me, Anyone; after a change
+      bump `RELAY_VERSION` and edit the existing deployment (a new one mints
+      a new URL).
 - [ ] `AUTH_LINK_REDIRECT_TO` (comma-separated inboxes) is for dry runs
       only: every link goes to one of those inboxes with the real recipient
       in the subject. It refuses to run when the Supabase URL is the
       production project or `VERCEL_ENV` is production. **Never set it on
       Production.**
-- [ ] Full-scale rehearsal on Preview: seed Preview, then
-      `npm run mail:dry-run -- --project-ref <preview ref> --site-url
-https://<preview deployment> --inboxes a@...,b@...,c@... --confirm`.
-      It mints a link for every member, sends them to the relay as one
-      batch, and reports the send's wall time against Apps Script's 360 s
-      limit, and the quota before and after. It never prints a link and
-      refuses the production ref.
+- [x] Email rehearsal on Preview: `npm run mail:dry-run -- --project-ref
+<preview ref> --site-url https://<preview deployment> --inboxes a@...,b@...
+--limit 20 --confirm`. Done 2026-10-31: 20/20 in 19.5 s (~1 s per message
+      over one connection). Messages reached the Inbox at a personal Gmail
+      address and at scu.edu. It never prints a link and refuses the
+      production ref.
+- [x] Check-in load on Preview: `npm run stress:checkin` (see the script).
+      Done 2026-10-31 with emails sent after the answer: 60 check-ins + 10
+      simultaneous duplicates, console sender: 60 in, 10 refused, nobody on
+      two teams, p50 4.1 s. 12 paced check-ins with real SMTP: 48/48 sent,
+      p50 1.5 s to answer, emails 5–8 s later. Don't burst real sends: 240
+      messages a minute from one account risks a Gmail sending lockout of
+      up to 24 hours. Clean up with `--cleanup <run>`.
 
 ## The event row (once per event)
 
@@ -191,6 +208,16 @@ Post-event improvement: a "create event" screen. Next year's officers
 shouldn't need to run a script, but creating the event happens once a year
 and a documented script is acceptable for now.
 
+## Production builds catch what dev doesn't
+
+- [ ] **Any change touching server-only modules gets a production build
+      check (`npm run build && next start`, then look at the rendered page),
+      not just `next dev`.** Three bugs so far appeared only in a production
+      build: the import screen's 500, page-level redirects arriving as 200s
+      (below), and nodemailer being bundled into one module with
+      `lib/server-env.ts` so `siteUrl()` came back undefined on `/t/[code]`.
+      nodemailer is now in `serverExternalPackages` (next.config.ts).
+
 ## Rendering: status codes under cacheComponents
 
 - [ ] **Under `cacheComponents`, any page-level `redirect()` or `notFound()`
@@ -208,7 +235,7 @@ and a documented script is acceptable for now.
 ## Verify on the deployed URL
 
 - [ ] `/login` renders on production and on a preview.
-- [ ] Once Apps Script is live: a link requested on a laptop and opened on a
-      phone lands on `/me` with the right role, and the `[auth] ... link
+- [ ] A link requested on a laptop and opened on a phone lands on `/me`
+      with the right role, and the `[auth] ... link
       minted for` log line shows the expected origin (production URL on
       production, the preview's own URL on a preview).

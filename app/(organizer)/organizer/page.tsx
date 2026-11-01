@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   adminDb,
   currentEvent,
+  loadCheckinEmails,
   loadJudges,
   loadSchedules,
   loadStations,
@@ -20,12 +21,18 @@ export default async function OrganizerPage() {
   const db = await adminDb();
   const event = await currentEvent(db);
   if (!event) return <p>No event exists yet.</p>;
-  const [judges, stations, teams, schedules] = await Promise.all([
+  const [judges, stations, teams, schedules, emails] = await Promise.all([
     loadJudges(db, event.id),
     loadStations(db, event.id),
     loadTeams(db, event.id),
     loadSchedules(db, event.id),
+    loadCheckinEmails(db, event.id),
   ]);
+  const emailProblems = emails.filter((e) => e.status === "failed" || e.stuck);
+  const emailsSent = emails.filter((e) => e.status === "sent").length;
+  const emailsSending = emails.filter(
+    (e) => e.status === "sending" && !e.stuck,
+  ).length;
   const checkedIn = teams.filter((t) => t.checkedIn);
   const check = preflight(
     judges.map((j) => j.affiliation),
@@ -66,6 +73,18 @@ export default async function OrganizerPage() {
               <th>Teams checked in</th>
               <td>
                 {checkedIn.length} of {teams.length}
+              </td>
+            </tr>
+            <tr>
+              <th>Check-in emails</th>
+              <td>
+                {emails.length === 0
+                  ? "none yet"
+                  : `${emailsSent} team(s) all sent` +
+                    (emailsSending ? `, ${emailsSending} sending now` : "") +
+                    (emailProblems.length
+                      ? `, ${emailProblems.length} with emails not sent (below)`
+                      : "")}
               </td>
             </tr>
             <tr>
@@ -120,6 +139,39 @@ export default async function OrganizerPage() {
           </tbody>
         </table>
       </Section>
+      {emailProblems.length > 0 && (
+        <Section title="Check-in emails not sent">
+          <p className="mb-2 text-sm">
+            These people have no sign-in link. Their team&apos;s join code works
+            without one: read it out, or the captain can fix the address and
+            resend on their teammates page.
+          </p>
+          <table className={table}>
+            <thead>
+              <tr>
+                <th>Team</th>
+                <th>Join code</th>
+                <th>Not sent to</th>
+                <th>Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              {emailProblems.map((e) => (
+                <tr key={e.joinCode}>
+                  <td>{e.teamName}</td>
+                  <td className="font-mono">{e.joinCode}</td>
+                  <td>{e.stuck ? "possibly everyone" : e.failed.join(", ")}</td>
+                  <td>
+                    {e.stuck
+                      ? `still "sending" since ${clockWithZone(e.updatedAt, event.timezone)}: the send was cut short`
+                      : (e.error ?? "")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )}
       <p className="text-sm">
         <Link href="/organizer/generate" className="underline">
           Generate a new draft

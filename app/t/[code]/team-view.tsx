@@ -62,9 +62,8 @@ export function TeamViewClient({
   initial: TeamView | null;
   fetchedAt: number | null;
   welcome?: {
-    receiptSent: boolean;
+    site: string;
     invited: number;
-    inviteFailures: number;
   } | null;
 }) {
   const [live, setLive] = useState<Saved | null>(
@@ -364,16 +363,13 @@ export function TeamViewClient({
  */
 function Welcome({
   code,
-  receiptSent,
+  site,
   invited,
-  inviteFailures,
 }: {
   code: string;
-  receiptSent: boolean;
+  site: string;
   invited: number;
-  inviteFailures: number;
 }) {
-  const invitedOk = invited - inviteFailures;
   return (
     <section
       role="status"
@@ -383,23 +379,24 @@ function Welcome({
       <p className="mt-3 text-lg">Your team&apos;s join code:</p>
       <p className="font-mono text-5xl font-extrabold tracking-wider">{code}</p>
       <p className="mt-2">
-        Screenshot this. The code opens this page, with your judging times, on
-        any phone, no sign-in needed.
+        Screenshot this. Your judging times are at{" "}
+        <Link className="font-semibold break-all underline" href={`/t/${code}`}>
+          {site}/t/{code}
+        </Link>{" "}
+        on any phone, no sign-in needed. Or go to{" "}
+        <Link className="font-semibold break-all underline" href="/t">
+          {site}/t
+        </Link>{" "}
+        and enter the code.
       </p>
-      <ul className="mt-3 list-disc space-y-1 pl-5">
-        <li>
-          {receiptSent
-            ? "We emailed you a receipt and a sign-in link."
-            : "We couldn't email you a receipt right now. Your check-in is saved; the code above is all you need."}
-        </li>
-        {invited > 0 && (
-          <li>
-            {inviteFailures === 0
-              ? `We emailed ${invited} teammate${invited === 1 ? "" : "s"} an invitation to join.`
-              : `${invitedOk} of ${invited} teammate invitations went out. Share the code with the others.`}
-          </li>
-        )}
-      </ul>
+      <p className="mt-3">
+        We&apos;re emailing you a receipt and a sign-in link
+        {invited > 0
+          ? `, and an invitation to ${invited === 1 ? "your teammate" : `your ${invited} teammates`}`
+          : ""}
+        . If anything hasn&apos;t arrived in a few minutes, share the code and{" "}
+        {site}/t: that&apos;s all anyone needs.
+      </p>
     </section>
   );
 }

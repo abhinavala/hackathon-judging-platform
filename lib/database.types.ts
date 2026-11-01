@@ -81,6 +81,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"checkin_emails": {
+                  Row: {
+                    "error": string | null,"failed": (string)[],"status": string,"team_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "error"?: string | null,"failed"?: (string)[],"status": string,"team_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "error"?: string | null,"failed"?: (string)[],"status"?: string,"team_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "checkin_emails_team_id_fkey"
+      columns: ["team_id"]
+isOneToOne: true
+      referencedRelation: "teams"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"events": {
                   Row: {
                     "checkin_closes_at": string | null,"checkin_opens_at": string | null,"created_at": string,"help_location": string | null,"id": string,"judging_starts_at": string | null,"name": string,"slot_minutes": number,"slug": string,"timezone": string,"year": number
@@ -363,6 +383,9 @@ isOneToOne: false
                            },
 "is_schedule_published":
 { Args: { "p_schedule": string }; Returns: boolean
+                           },
+"my_captain_team_ids":
+{ Args: Record<PropertyKey, never>; Returns: string[]
                            },
 "my_judge_ids":
 { Args: Record<PropertyKey, never>; Returns: string[]
