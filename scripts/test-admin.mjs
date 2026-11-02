@@ -511,10 +511,34 @@ async function run() {
     `a judge sees exactly the ${atStation} teams at their v3 station`,
     `${judgeTeams.length}`,
   );
-  check(
-    (await get("/judge", judgeUser.cookie)).status === 200,
-    "and can open /judge",
-  );
+  {
+    const page = await get("/judge", judgeUser.cookie);
+    // The rendered markup without React's payload, tags kept so a team
+    // name is matched as a whole element (">Name<").
+    const shown = page.html.replace(/<script[\s\S]*?<\/script>/g, "");
+    const { data: mine } = await db
+      .from("assignments")
+      .select("teams(name), slots(starts_at)")
+      .eq("schedule_id", draftId)
+      .eq("panel_id", station)
+      .neq("status", "cancelled");
+    const names = mine
+      .sort((a, b) => a.slots.starts_at.localeCompare(b.slots.starts_at))
+      .map((a) => a.teams.name);
+    const { data: everyone } = await db.from("teams").select("name");
+    const others = everyone
+      .map((t) => t.name)
+      .filter((n) => !names.includes(n) && shown.includes(`>${n}<`));
+    const order = names.map((n) => shown.indexOf(`>${n}<`));
+    check(
+      page.status === 200 &&
+        names.length > 0 &&
+        order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])) &&
+        others.length === 0,
+      `the judge's page lists their ${names.length} station teams in time order, and no one else's`,
+      JSON.stringify({ missing: names.filter((n, k) => order[k] < 0), others }),
+    );
+  }
 
   // 7. CSV export.
   const csv = await get(`${draftPath}/export`, org.cookie);
