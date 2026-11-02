@@ -357,7 +357,12 @@ export async function loadScheduleView(
   const draftPairs = new Map(
     (schedule.stats?.panelJudges ?? []).map((p) => [p.panelId, p.judgeIds]),
   );
-  const useDraft = draftPairs.size > 0;
+  // A draft is judged by the pairings it proposes (they take effect only on
+  // publish). The PUBLISHED version is judged by who sits at each station
+  // now: a judge swapped after publishing changes its coverage, and showing
+  // the figure from publish time ("64/64 track-seats met") would be
+  // confidently wrong. Archived versions keep their own pairings, as history.
+  const useDraft = schedule.status !== "published" && draftPairs.size > 0;
   const withComposition = stations.map((s) => {
     const composition = (useDraft ? (draftPairs.get(s.id) ?? []) : s.judgeIds)
       .map((id) => judgeById.get(id))

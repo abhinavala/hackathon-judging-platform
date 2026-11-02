@@ -2017,6 +2017,83 @@ async function run() {
     "teammates: through the API a teammate can't change tracks or details, or create a team (0011)",
   );
 
+  // Coverage on the published version follows who sits at each station now:
+  // removing a sponsor's judge after publishing must show up, not leave the
+  // figure from publish time standing.
+  {
+    const { data: live } = await db
+      .from("schedules")
+      .select("id")
+      .eq("status", "published")
+      .single();
+    const { data: seats } = await db
+      .from("panel_judges")
+      .select("panel_id, judge_id, judges(affiliation)");
+    const { data: rows } = await db
+      .from("assignments")
+      .select("panel_id, teams(team_tracks(tracks(sponsor)))")
+      .eq("schedule_id", live.id)
+      .neq("status", "cancelled");
+    const seat = seats.find(
+      (x) =>
+        x.judges.affiliation &&
+        rows.some(
+          (r) =>
+            r.panel_id === x.panel_id &&
+            r.teams.team_tracks.some(
+              (t) => t.tracks.sponsor === x.judges.affiliation,
+            ),
+        ),
+    );
+    const covered = async () =>
+      Number(
+        /(\d+)\/\d+ teams fully/.exec(
+          text((await get(`/organizer/schedules/${live.id}`, org.cookie)).html),
+        )?.[1],
+      );
+    // As after a full generate: the version carries the pairings it was
+    // published with (stats.panelJudges), matching the seating at the time.
+    const { data: liveRow } = await db
+      .from("schedules")
+      .select("stats")
+      .eq("id", live.id)
+      .single();
+    const byPanel = new Map();
+    for (const x of seats)
+      byPanel.set(x.panel_id, [...(byPanel.get(x.panel_id) ?? []), x.judge_id]);
+    await db
+      .from("schedules")
+      .update({
+        stats: {
+          ...(liveRow.stats ?? {}),
+          panelJudges: [...byPanel].map(([panelId, judgeIds]) => ({
+            panelId,
+            judgeIds,
+          })),
+        },
+      })
+      .eq("id", live.id);
+    const before = await covered();
+    await db
+      .from("panel_judges")
+      .delete()
+      .eq("panel_id", seat.panel_id)
+      .eq("judge_id", seat.judge_id);
+    const after = await covered();
+    await db
+      .from("panel_judges")
+      .insert({ panel_id: seat.panel_id, judge_id: seat.judge_id });
+    await db
+      .from("schedules")
+      .update({ stats: liveRow.stats })
+      .eq("id", live.id);
+    check(
+      after < before && (await covered()) === before,
+      "published coverage is recomputed from the current seating, not frozen at publish",
+      `${before} -> ${after}`,
+    );
+  }
+
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 }
 
