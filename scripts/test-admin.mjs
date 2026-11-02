@@ -1122,6 +1122,57 @@ async function run() {
       ),
     "event screen: blank clears the settings; the overview says they're unset",
   );
+
+  // The check-in window is on the same screen now.
+  {
+    const { data: before } = await db
+      .from("events")
+      .select("id, checkin_opens_at, checkin_closes_at")
+      .single();
+    r = await submit("/organizer/event", org.cookie, "checkinOpensAt", {
+      checkinOpensAt: "2099-01-02T08:45",
+      checkinClosesAt: "2099-01-02T08:00",
+    });
+    check(
+      flash(r.url) === "Check-in has to close after it opens.",
+      "event screen: a check-in window that closes before it opens is refused",
+      flash(r.url),
+    );
+    r = await submit("/organizer/event", org.cookie, "checkinOpensAt", {
+      checkinOpensAt: "2099-01-02T08:45",
+      checkinClosesAt: "2099-01-02T11:00",
+    });
+    const { data: win } = await db
+      .from("events")
+      .select("checkin_opens_at, checkin_closes_at")
+      .single();
+    const form = visible((await get("/checkin")).html);
+    check(
+      flash(r.url).startsWith("Saved.") &&
+        Date.parse(win.checkin_opens_at) ===
+          Date.parse("2099-01-02T16:45:00Z") &&
+        form.includes("Check-in opens at 8:45 AM PST"),
+      "event screen: sets when check-in opens (event zone); the form says so",
+      JSON.stringify(win),
+    );
+    r = await submit("/organizer/event", org.cookie, "checkinOpensAt", {
+      checkinOpensAt: "",
+      checkinClosesAt: "",
+    });
+    check(
+      visible((await get("/checkin")).html).includes(
+        "One person per team fills this in",
+      ),
+      "event screen: blank opens check-in with no limit",
+    );
+    await db
+      .from("events")
+      .update({
+        checkin_opens_at: before.checkin_opens_at,
+        checkin_closes_at: before.checkin_closes_at,
+      })
+      .eq("id", before.id);
+  }
   await db
     .from("events")
     .update({

@@ -19,6 +19,8 @@ export default async function EventSettingsPage({
   if (!event) return <p>No event exists yet.</p>;
   const tz = event.timezone;
   const start = event.judging_starts_at;
+  const opens = event.checkin_opens_at;
+  const closes = event.checkin_closes_at;
 
   return (
     <main>
@@ -43,6 +45,35 @@ export default async function EventSettingsPage({
           </label>
         </Section>
 
+        <Section title="Check-in">
+          <p className="mb-2 max-w-3xl text-sm">
+            Before check-in opens, the form only says when it will. After it
+            closes, teams can still check in, but are told the schedule may be
+            set and to find an organizer so they can be added. Blank means no
+            limit.
+          </p>
+          <div className="flex flex-wrap gap-4">
+            <label className="flex flex-col text-sm">
+              Check-in opens ({tz})
+              <input
+                name="checkinOpensAt"
+                type="datetime-local"
+                defaultValue={opens ? utcToZonedLocal(opens, tz) : ""}
+                className={`${input} w-fit`}
+              />
+            </label>
+            <label className="flex flex-col text-sm">
+              Check-in closes ({tz})
+              <input
+                name="checkinClosesAt"
+                type="datetime-local"
+                defaultValue={closes ? utcToZonedLocal(closes, tz) : ""}
+                className={`${input} w-fit`}
+              />
+            </label>
+          </div>
+        </Section>
+
         <Section title="Where to get help">
           <p className="mb-2 max-w-3xl text-sm">
             A place someone new to the building can find. It completes the
@@ -64,6 +95,17 @@ export default async function EventSettingsPage({
 
         <Section title="What participants see now">
           <ul className="list-disc space-y-1 pl-5 text-sm">
+            <li>
+              The check-in form:{" "}
+              <q>
+                {opens
+                  ? `Check-in opens at ${clockWithZone(opens, tz)} on ${dayLabel(opens, tz)}`
+                  : "Open now"}
+                {closes
+                  ? `; closes at ${clockWithZone(closes, tz)} on ${dayLabel(closes, tz)}.`
+                  : "; no closing time."}
+              </q>
+            </li>
             <li>
               Before publishing:{" "}
               <q>
