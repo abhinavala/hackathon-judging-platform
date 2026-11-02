@@ -1,4 +1,6 @@
 import { connection } from "next/server";
+import { cookies } from "next/headers";
+import { DRAFT_COOKIE, decodeDraft } from "@/lib/checkin/draft";
 import { loadCheckInEvent } from "@/lib/checkin/submit";
 import { helpPlace } from "@/lib/event/copy";
 import { clockWithZone, dayLabel } from "@/lib/team/view";
@@ -21,6 +23,10 @@ export default async function CheckInPage({
   await connection();
   const event = await loadCheckInEvent();
   const error = typeof params.error === "string" ? params.error : null;
+  // Back from a no-JavaScript submit that needed fixing: what was typed.
+  const draft = error
+    ? decodeDraft((await cookies()).get(DRAFT_COOKIE)?.value)
+    : null;
 
   if (!event)
     return (
@@ -60,7 +66,11 @@ export default async function CheckInPage({
             </p>
           )}
           <p className="mb-6 text-sm">Problems? Find an organizer at {help}.</p>
-          <CheckInForm tracks={event.tracks} initialError={error} />
+          <CheckInForm
+            tracks={event.tracks}
+            initialError={error}
+            initial={draft}
+          />
         </>
       )}
     </main>

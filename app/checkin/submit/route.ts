@@ -1,4 +1,5 @@
-import { fieldsFromFormData } from "@/lib/checkin/form";
+import { DRAFT_COOKIE, DRAFT_MAX_AGE, encodeDraft } from "@/lib/checkin/draft";
+import { fieldsFromFormData, type FormFields } from "@/lib/checkin/form";
 import { loadCheckInEvent, submitCheckIn } from "@/lib/checkin/submit";
 import { helpPlace } from "@/lib/event/copy";
 import { allow, clientIp, LIMITS } from "@/lib/rate-limit";
@@ -41,14 +42,16 @@ export async function POST(req: Request) {
       429,
     );
   }
-  const result = await submitCheckIn(fieldsFromFormData(form), Date.now());
-  return reply(wantsJson, result);
+  const fields = fieldsFromFormData(form);
+  const result = await submitCheckIn(fields, Date.now());
+  return reply(wantsJson, result, 422, fields);
 }
 
 function reply(
   wantsJson: boolean,
   result: Awaited<ReturnType<typeof submitCheckIn>>,
   errorStatus = 422,
+  fields?: FormFields,
 ): Response {
   const to = result.ok
     ? `/t/${result.joinCode}?${new URLSearchParams({
@@ -63,5 +66,16 @@ function reply(
       status: result.ok ? 200 : errorStatus,
       headers: { "cache-control": "no-store" },
     });
-  return new Response(null, { status: 303, headers: { Location: to } });
+  // Without JavaScript the browser leaves the form: keep what was typed for
+  // it to fill back in (lib/checkin/draft.ts), and forget it on success.
+  const headers = new Headers({ Location: to });
+  const draft = !result.ok && fields ? encodeDraft(fields) : null;
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  headers.append(
+    "Set-Cookie",
+    draft
+      ? `${DRAFT_COOKIE}=${draft}; Path=/checkin; Max-Age=${DRAFT_MAX_AGE}; HttpOnly; SameSite=Lax${secure}`
+      : `${DRAFT_COOKIE}=; Path=/checkin; Max-Age=0; HttpOnly; SameSite=Lax${secure}`,
+  );
+  return new Response(null, { status: 303, headers });
 }
