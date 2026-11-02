@@ -47,8 +47,19 @@ export default async function SchedulesPage({
             </thead>
             <tbody>
               {schedules.map((s) => {
+                // Out of date: older than the live version, or a late change
+                // copied from a version that's no longer the live one.
+                const basedOn = (
+                  s.stats as { basedOn?: { version: number } } | null
+                )?.basedOn?.version;
                 const superseded =
                   s.status === "draft" && live && s.version < live.version;
+                const staleLate =
+                  s.status === "draft" &&
+                  live &&
+                  !superseded &&
+                  basedOn != null &&
+                  basedOn !== live.version;
                 return (
                   <tr key={s.id}>
                     <td>v{s.version}</td>
@@ -59,7 +70,9 @@ export default async function SchedulesPage({
                     >
                       {superseded
                         ? `draft, superseded by v${live.version}`
-                        : s.status}
+                        : staleLate
+                          ? `draft, out of date (made from v${basedOn}; v${live.version} is published)`
+                          : s.status}
                     </td>
                     <td>{when(s.generated_at)}</td>
                     <td>{when(s.published_at)}</td>
@@ -68,7 +81,7 @@ export default async function SchedulesPage({
                         href={`/organizer/schedules/${s.id}`}
                         className="underline"
                       >
-                        {s.status === "draft" && !superseded
+                        {s.status === "draft" && !superseded && !staleLate
                           ? "Review and publish"
                           : "View"}
                       </Link>

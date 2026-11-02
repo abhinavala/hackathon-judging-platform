@@ -1386,7 +1386,7 @@ async function run() {
   check(
     list12.includes("draft, superseded by v") &&
       list12.includes("Late team or dropped team") &&
-      /structural errors/.test(flash(r.url)),
+      /out of date/.test(flash(r.url)),
     "superseded draft: an older draft is marked superseded and can't be published",
     flash(r.url),
   );
@@ -1441,7 +1441,7 @@ async function run() {
   check(
     text(dropHtml).includes("Already accepted in v") &&
       !dropAcks.includes("ack:tight-spacing") &&
-      dropAcks.includes("ack:unfilled-slots") &&
+      !dropAcks.includes("ack:unfilled-slots") &&
       dropAcks.includes("ack:changes-vs-published"),
     "drop: the unchanged spacing warning is shown as already accepted; changed and new ones need a tick",
     dropAcks.join(", "),
@@ -1451,12 +1451,14 @@ async function run() {
     org.cookie,
     "I&#x27;ve reviewed this",
     Object.fromEntries(
-      dropAcks.filter((a) => a !== "ack:unfilled-slots").map((a) => [a, "on"]),
+      dropAcks
+        .filter((a) => a !== "ack:changes-vs-published")
+        .map((a) => [a, "on"]),
     ),
     { keepChecked: false },
   );
   check(
-    /Not acknowledged: \d+ empty seats/.test(flash(r.url)),
+    /Not acknowledged: Changes from the published/.test(flash(r.url)),
     "drop: publishing without ticking a CHANGED warning is refused, server-side",
     flash(r.url),
   );
@@ -1498,11 +1500,14 @@ async function run() {
   }
   r = await publishDraft(stalePath);
   check(
-    /structural errors/.test(flash(r.url)) &&
+    /out of date/.test(flash(r.url)) &&
       text((await get(stalePath, org.cookie)).html).includes(
         "Publishing it would undo whatever changed since",
+      ) &&
+      text((await get("/organizer/schedules", org.cookie)).html).includes(
+        "draft, out of date (made from v",
       ),
-    "stale late change: a draft copied from an older version can't be published",
+    "stale late change: a draft copied from an older version can't be published, and the list says it's out of date",
     flash(r.url),
   );
   r = await submit(stalePath, org.cookie, "Discard draft", {});

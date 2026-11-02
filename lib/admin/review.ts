@@ -96,6 +96,12 @@ export type Review = {
     perStation: { stationId: string; label: string; teams: number }[];
   };
   invalid: string[];
+  /**
+   * The draft was made before the version now published (a stale late
+   * change, or an older draft). It is in `invalid` too, so it can't be
+   * published; this is for wording it as what it is, not a broken schedule.
+   */
+  outOfDate: boolean;
   diff: {
     againstVersion: number;
     moved: { name: string; from: Placement[]; to: Placement[] }[];
@@ -138,6 +144,10 @@ export function reviewSchedule(input: ReviewInput): Review {
       invalid.push(`${t.name} is in two places at once.`);
   }
 
+  const outOfDate =
+    (input.basedOnVersion != null &&
+      input.basedOnVersion !== input.published?.version) ||
+    input.supersededBy != null;
   if (
     input.basedOnVersion != null &&
     input.basedOnVersion !== input.published?.version
@@ -278,12 +288,21 @@ export function reviewSchedule(input: ReviewInput): Review {
       });
     }
   }
-  if (capacity.unfilled > 0) {
+  // Empty seats beyond what Generate recommends (the minimum slot count plus
+  // two: room for late teams) are worth a look. The recommended spare seats
+  // themselves are not: warning about them made every publish tick a box for
+  // something the generate screen had just suggested.
+  const minimumSlots = usedStations.length
+    ? Math.ceil(assignments.length / usedStations.length)
+    : 0;
+  const recommendedSpare =
+    usedStations.length * (minimumSlots + 2) - assignments.length;
+  if (capacity.unfilled > recommendedSpare) {
     warnings.push({
       id: "unfilled-slots",
       title: `${capacity.unfilled} empty seat${capacity.unfilled === 1 ? "" : "s"} across stations`,
       detail: [
-        "Judges will have idle slots; expected when team counts don't divide evenly.",
+        `More than the ${recommendedSpare} spare seats Generate recommends (two slots above the minimum). Judges will have idle slots.`,
       ],
     });
   }
@@ -340,6 +359,7 @@ export function reviewSchedule(input: ReviewInput): Review {
     overlap: { matrix, maxShared, heavy },
     capacity,
     invalid,
+    outOfDate,
     diff,
     warnings,
   };

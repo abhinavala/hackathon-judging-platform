@@ -89,7 +89,7 @@ test("uncovered teams are listed by name with what they miss", () => {
   assert.ok(w.detail.includes("Team 1: no A10 judge"));
 });
 
-test("tight spacing, an empty seat and excluded teams are each flagged", () => {
+test("tight spacing and excluded teams are flagged; one empty seat is not", () => {
   const input = eventInput();
   // Put Team 1's second presentation in the slot right after its first, at
   // the same station it already uses for that second presentation, evicting
@@ -118,14 +118,39 @@ test("tight spacing, an empty seat and excluded teams are each flagged", () => {
     review.spacing.tight.some((t) => t.name === "Team 1" && t.gap === 1),
   );
   assert.ok(ids.includes("tight-spacing"));
-  assert.ok(ids.includes("unfilled-slots"));
+  // An empty seat or two is well within the spare Generate recommends.
   assert.ok(review.capacity.unfilled >= 1);
+  assert.ok(!ids.includes("unfilled-slots"));
   assert.ok(ids.includes("excluded-teams"));
   assert.ok(
     review.warnings
       .find((w) => w.id === "excluded-teams")!
       .detail.includes("Late Team"),
   );
+});
+
+test("empty seats warn only beyond the two spare slots Generate recommends", () => {
+  const withSlots = (extra: number) => {
+    const input = eventInput();
+    const start = Date.parse(input.slots[0].startsAt as string);
+    const n = input.slots.length;
+    for (let i = n; i < n + extra; i++)
+      input.slots.push({
+        id: `s${i}`,
+        index: i,
+        startsAt: new Date(start + i * 7 * 60_000).toISOString(),
+      });
+    return reviewSchedule(input);
+  };
+  // 60 teams on 8 stations: 15 slots is exactly full.
+  const recommended = withSlots(2);
+  assert.equal(recommended.capacity.unfilled, 16);
+  assert.ok(!recommended.warnings.some((w) => w.id === "unfilled-slots"));
+  const more = withSlots(3);
+  assert.equal(more.capacity.unfilled, 24);
+  const w = more.warnings.find((x) => x.id === "unfilled-slots");
+  assert.ok(w);
+  assert.match(w.detail[0], /More than the 16 spare seats Generate recommends/);
 });
 
 test("overlap above 5 shared teams is a warning", () => {

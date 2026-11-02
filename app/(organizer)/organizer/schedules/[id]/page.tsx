@@ -121,7 +121,9 @@ export default async function SchedulePage({
           className="mb-6 rounded border-2 border-red-600 p-3 text-sm"
         >
           <p className="font-semibold">
-            Structural errors: this schedule cannot be published.
+            {review.outOfDate
+              ? "Out of date: a newer version is published, so this draft can't be."
+              : "Structural errors: this schedule cannot be published."}
           </p>
           <ul className="list-disc pl-6">
             {review.invalid.map((m) => (
