@@ -31,6 +31,26 @@ try {
   const home = await fetch(`${base}/`, { redirect: "manual" });
   if (home.status !== 200)
     throw new Error(`/ for anon: expected 200, got ${home.status}`);
+  // The front page: the join-code box first, then check-in, the board and
+  // where to find a person. Checked in the rendered markup, not React's
+  // payload.
+  const homeHtml = (await home.text()).replace(
+    /<script[\s\S]*?<\/script>/g,
+    "",
+  );
+  for (const [what, ok] of [
+    ["the heading", homeHtml.includes("Find your judging times")],
+    [
+      "a code box posting to /t/go",
+      /<form[^>]*action="\/t\/go"/.test(homeHtml) &&
+        homeHtml.includes('name="code"'),
+    ],
+    ["a check-in link", homeHtml.includes('href="/checkin"')],
+    ["a board link", /href="\/board\/[^"]+"/.test(homeHtml)],
+    ["where to find an organizer", homeHtml.includes("Find an organizer at")],
+    ["nothing else (no account link)", !homeHtml.includes('href="/me"')],
+  ])
+    if (!ok) throw new Error(`/ is missing ${what}`);
 
   // Signing out with no session is a no-op, not a bounce to /login.
   const signout = await fetch(`${base}/auth/signout`, {
@@ -142,7 +162,7 @@ try {
   await expectStatus("/judge", late.cookie, 200);
 
   console.log(
-    "smoke: OK  /login renders; no-JS sign-in shows its outcome in the page; / public; anon /me -> /login; anon sign-out is a no-op; role gates are real 404s and read the role live",
+    "smoke: OK  /login renders; no-JS sign-in shows its outcome in the page; / is public with the code box, check-in, board and help; anon /me -> /login; anon sign-out is a no-op; role gates are real 404s and read the role live",
   );
   exitCode = 0;
 } catch (err) {
