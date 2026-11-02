@@ -64,7 +64,7 @@ one out. **Keep a printed list of join codes at the help desk.**
 | An old draft is sitting there looking publishable | — | Drafts older than the published version **can't** be published and are marked "superseded" |
 | A team shows up late | — | Schedules → **"Late team or dropped team"** (first section of the published schedule) |
 | A team doesn't show | — | Same place, drop them. Their seats free up for the next late team. Once the drop is published the team is **withdrawn**: Generate leaves it unticked (and says why), so regenerating doesn't bring it back. Tick it to include it again on purpose |
-| A sponsor's judge is swapped out of a station | Nothing warns (known gap, found 2 Nov) | The Stations screen checks only double-seating, and the published schedule's coverage figure is from publish time, so it keeps saying "all covered". Before swapping an AWS or A10 judge, check which teams at that station chose the track, and replace like with like |
+| A sponsor's judge is swapped out of a station | Saving the station warns (amber): "N teams here chose AWS and no AWS judge sits here now", naming them | Seat a judge from that sponsor there if one is free. The published schedule's coverage figure follows the current seating, so it shows the gap too. Coverage is a soft constraint: the event goes on |
 | Adding a late team added 14 minutes | The schedule was exactly full | **Generate with 17 slots, not 15.** 16 spare seats absorb up to 8 late teams at no added time |
 
 **Late changes never edit the live schedule.** They copy it into a new draft

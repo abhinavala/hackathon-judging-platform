@@ -7,8 +7,11 @@ import {
   adminDb,
   currentEvent,
   loadJudges,
+  loadSchedules,
   loadStations,
+  loadTeams,
 } from "@/lib/admin/data";
+import { coverageLost } from "@/lib/admin/coverage";
 import { back } from "../_ui/redirect";
 
 const PATH = "/organizer/panels";
@@ -54,9 +57,11 @@ export async function updateStation(form: FormData) {
     ...new Set(form.getAll("judge").map(String).filter(Boolean)),
   ];
 
-  const [stations, judges] = await Promise.all([
+  const [stations, judges, teams, schedules] = await Promise.all([
     loadStations(db, event.id),
     loadJudges(db, event.id),
+    loadTeams(db, event.id),
+    loadSchedules(db, event.id),
   ]);
   const name = new Map(judges.map((j) => [j.id, j.fullName]));
   for (const jid of judgeIds) {
@@ -101,6 +106,40 @@ export async function updateStation(form: FormData) {
     if (e) back(PATH, { error: e.message });
   }
   revalidatePath(PATH);
+
+  // Did this change leave teams at this station, on the published schedule,
+  // without the sponsor's judge they chose? Nothing else would say so.
+  const published = schedules.find((s) => s.status === "published");
+  if (published && removed.length) {
+    const { data: here } = await db
+      .from("assignments")
+      .select("team_id")
+      .eq("schedule_id", published.id)
+      .eq("panel_id", id)
+      .neq("status", "cancelled");
+    const ids = new Set((here ?? []).map((a) => a.team_id));
+    const affiliation = new Map(judges.map((j) => [j.id, j.affiliation]));
+    const sponsorsOf = (ids: string[]) =>
+      ids.map((j) => affiliation.get(j)).filter((a): a is string => !!a);
+    const lost = coverageLost(
+      teams
+        .filter((t) => ids.has(t.id))
+        .map((t) => ({ name: t.name, sponsors: t.sponsors })),
+      sponsorsOf(current),
+      sponsorsOf(judgeIds),
+    );
+    if (lost.length)
+      back(PATH, {
+        warn: `Saved ${label}, but ${lost
+          .map(
+            (l) =>
+              `${l.teams.length} team${l.teams.length === 1 ? "" : "s"} here chose ${l.sponsor} and no ${l.sponsor} judge sits here now (${l.teams.slice(0, 6).join(", ")}${l.teams.length > 6 ? ", …" : ""})`,
+          )
+          .join(
+            "; ",
+          )}. Seat a ${lost.map((l) => l.sponsor).join(" or ")} judge here if one is free.`,
+      });
+  }
   back(PATH, { ok: `Saved ${label}.` });
 }
 
