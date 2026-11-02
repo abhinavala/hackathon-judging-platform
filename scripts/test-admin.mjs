@@ -2094,6 +2094,61 @@ async function run() {
     );
   }
 
+  // Saving a station that drops a sponsor's judge warns, naming the sponsor
+  // and the teams here that chose it; an unchanged save doesn't.
+  {
+    const { data: live } = await db
+      .from("schedules")
+      .select("id")
+      .eq("status", "published")
+      .single();
+    const { data: seats } = await db
+      .from("panel_judges")
+      .select("panel_id, judge_id, judges(affiliation)");
+    const { data: rows } = await db
+      .from("assignments")
+      .select("panel_id, teams(team_tracks(tracks(sponsor, judged_live)))")
+      .eq("schedule_id", live.id)
+      .neq("status", "cancelled");
+    const seat = seats.find(
+      (x) =>
+        x.judges.affiliation &&
+        !seats.some(
+          (y) =>
+            y.panel_id === x.panel_id &&
+            y.judge_id !== x.judge_id &&
+            y.judges.affiliation === x.judges.affiliation,
+        ) &&
+        rows.some(
+          (r) =>
+            r.panel_id === x.panel_id &&
+            r.teams.team_tracks.some(
+              (t) =>
+                t.tracks.judged_live &&
+                t.tracks.sponsor === x.judges.affiliation,
+            ),
+        ),
+    );
+    const other = seats.find(
+      (y) => y.panel_id === seat.panel_id && y.judge_id !== seat.judge_id,
+    );
+    const marker = `value="${seat.panel_id}"`;
+    r = await submit("/organizer/panels", org.cookie, marker, {
+      judge: [other?.judge_id ?? "", ""],
+    });
+    const warned = r.url?.searchParams.get("warn") ?? "";
+    await db
+      .from("panel_judges")
+      .insert({ panel_id: seat.panel_id, judge_id: seat.judge_id });
+    r = await submit("/organizer/panels", org.cookie, marker, {});
+    check(
+      warned.includes(`no ${seat.judges.affiliation} judge sits here now`) &&
+        /^Saved /.test(flash(r.url)),
+      "stations: dropping a sponsor's judge warns, naming the sponsor and its teams; an unchanged save doesn't",
+      warned || flash(r.url),
+    );
+  }
+
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 }
 

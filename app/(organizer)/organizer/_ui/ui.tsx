@@ -6,14 +6,21 @@ export function Flash({
   params: Record<string, string | string[] | undefined>;
 }) {
   const error = typeof params.error === "string" ? params.error : null;
+  const warn = typeof params.warn === "string" ? params.warn : null;
   const ok = typeof params.ok === "string" ? params.ok : null;
-  if (!error && !ok) return null;
+  if (!error && !warn && !ok) return null;
   return (
     <p
-      role={error ? "alert" : "status"}
-      className={`mb-4 rounded border px-3 py-2 text-sm ${error ? "border-red-600 text-red-700 dark:text-red-400" : "border-green-700 text-green-800 dark:text-green-400"}`}
+      role={error || warn ? "alert" : "status"}
+      className={`mb-4 rounded border px-3 py-2 text-sm ${
+        error
+          ? "border-red-600 text-red-700 dark:text-red-400"
+          : warn
+            ? "border-2 border-amber-500 bg-amber-50 font-semibold text-amber-950"
+            : "border-green-700 text-green-800 dark:text-green-400"
+      }`}
     >
-      {error ?? ok}
+      {error ?? warn ?? ok}
     </p>
   );
 }
