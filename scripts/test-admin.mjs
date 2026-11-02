@@ -1349,6 +1349,13 @@ async function run() {
         .every(([k, panel]) => dropSeats.get(k) === panel),
     "drop: its assignments are cancelled, nothing is re-packed, nobody else moves",
   );
+  const withdrawnAt = async () =>
+    (await db.from("teams").select("withdrawn_at").eq("id", tv.id).single())
+      .data.withdrawn_at;
+  check(
+    (await withdrawnAt()) === null,
+    "drop: drafting a drop withdraws nobody (a discarded draft must not)",
+  );
 
   // Warnings identical to the published version's are already accepted and
   // shown without a tick box; changed or new ones still need one.
@@ -1398,6 +1405,22 @@ async function run() {
     ),
     "drop: the dropped team's page says it isn't scheduled",
   );
+  check(
+    (await withdrawnAt()) !== null,
+    "drop: publishing it marks the team withdrawn (0013)",
+  );
+  {
+    const gen = (await get("/organizer/generate", org.cookie)).html;
+    const box =
+      new RegExp(`<input[^>]*value="${tv.id}"[^>]*>`).exec(gen)?.[0] ?? "";
+    check(
+      box !== "" &&
+        !/checked/.test(box) &&
+        text(gen).includes("withdrawn: dropped after publishing"),
+      "drop: Generate lists a withdrawn team unticked, and says why",
+      box,
+    );
+  }
   r = await publishDraft(stalePath);
   check(
     /structural errors/.test(flash(r.url)) &&

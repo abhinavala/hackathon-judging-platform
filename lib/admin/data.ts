@@ -93,6 +93,9 @@ export type Team = {
   id: string;
   name: string;
   checkedIn: boolean;
+  /** Dropped by a published late change: left out of a new generate unless
+   *  an organizer ticks it back in (0013). */
+  withdrawn: boolean;
   /** Track names. */
   tracks: string[];
   /** Sponsors of the team's tracks (what judges can cover). */
@@ -214,7 +217,7 @@ export async function loadTeams(db: Db, eventId: string): Promise<Team[]> {
   const [teams, tracks] = await Promise.all([
     db
       .from("teams")
-      .select("id, name, checked_in_at")
+      .select("id, name, checked_in_at, withdrawn_at")
       .eq("event_id", eventId)
       .order("name"),
     loadTracks(db, eventId),
@@ -239,6 +242,7 @@ export async function loadTeams(db: Db, eventId: string): Promise<Team[]> {
       id: t.id,
       name: t.name,
       checkedIn: t.checked_in_at !== null,
+      withdrawn: t.withdrawn_at !== null,
       tracks: mine.map((x) => x.name),
       // Only live-judged tracks need a sponsor's judge in the room: a track
       // decided offline (judged_live = false) is ignored by the scheduler
@@ -434,7 +438,7 @@ export async function loadScheduleView(
         ? { startsAt: event.judging_starts_at, timezone: event.timezone }
         : null,
       excludedTeams: teams
-        .filter((t) => t.checkedIn && !scheduled.has(t.id))
+        .filter((t) => t.checkedIn && !t.withdrawn && !scheduled.has(t.id))
         .map((t) => ({ id: t.id, name: t.name })),
       basedOnVersion: schedule.stats?.basedOn?.version ?? null,
       supersededBy:

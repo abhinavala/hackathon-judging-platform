@@ -28,7 +28,7 @@ export default async function JudgesPage({
     loadTracks(db, event.id),
     loadStations(db, event.id),
   ]);
-  const checkedIn = teams.filter((t) => t.checkedIn);
+  const checkedIn = teams.filter((t) => t.checkedIn && !t.withdrawn);
   // Live pre-flight: roster x the checked-in teams' demand, every render.
   const check = preflight(
     judges.map((j) => j.affiliation),

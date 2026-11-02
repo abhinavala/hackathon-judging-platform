@@ -323,14 +323,14 @@ isOneToOne: false
                   ]
                 },"teams": {
                   Row: {
-                    "all_freshmen": boolean | null,"checked_in_at": string | null,"contact_email": string | null,"contact_phone": string | null,"created_at": string,"created_by": string | null,"devpost_url": string | null,"event_id": string,"github_urls": (string)[],"half_or_more_non_male": boolean | null,"has_grad_student": boolean | null,"id": string,"join_code": string,"name": string,"notes": string | null
+                    "all_freshmen": boolean | null,"checked_in_at": string | null,"contact_email": string | null,"contact_phone": string | null,"created_at": string,"created_by": string | null,"devpost_url": string | null,"event_id": string,"github_urls": (string)[],"half_or_more_non_male": boolean | null,"has_grad_student": boolean | null,"id": string,"join_code": string,"name": string,"notes": string | null,"withdrawn_at": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "all_freshmen"?: boolean | null,"checked_in_at"?: string | null,"contact_email"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"devpost_url"?: string | null,"event_id": string,"github_urls"?: (string)[],"half_or_more_non_male"?: boolean | null,"has_grad_student"?: boolean | null,"id"?: string,"join_code": string,"name": string,"notes"?: string | null
+                    "all_freshmen"?: boolean | null,"checked_in_at"?: string | null,"contact_email"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"devpost_url"?: string | null,"event_id": string,"github_urls"?: (string)[],"half_or_more_non_male"?: boolean | null,"has_grad_student"?: boolean | null,"id"?: string,"join_code": string,"name": string,"notes"?: string | null,"withdrawn_at"?: string | null
                   }
                   Update: {
-                    "all_freshmen"?: boolean | null,"checked_in_at"?: string | null,"contact_email"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"devpost_url"?: string | null,"event_id"?: string,"github_urls"?: (string)[],"half_or_more_non_male"?: boolean | null,"has_grad_student"?: boolean | null,"id"?: string,"join_code"?: string,"name"?: string,"notes"?: string | null
+                    "all_freshmen"?: boolean | null,"checked_in_at"?: string | null,"contact_email"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"devpost_url"?: string | null,"event_id"?: string,"github_urls"?: (string)[],"half_or_more_non_male"?: boolean | null,"has_grad_student"?: boolean | null,"id"?: string,"join_code"?: string,"name"?: string,"notes"?: string | null,"withdrawn_at"?: string | null
                   }
                   Relationships: [
                     {

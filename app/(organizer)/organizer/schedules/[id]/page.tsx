@@ -59,8 +59,8 @@ export default async function SchedulePage({
     .filter((t) => !inThis.has(t.id))
     .sort(
       (a, b) =>
-        Number(b.checkedIn) - Number(a.checkedIn) ||
-        a.name.localeCompare(b.name),
+        Number(b.checkedIn && !b.withdrawn) -
+          Number(a.checkedIn && !a.withdrawn) || a.name.localeCompare(b.name),
     );
   const nextVersion = Math.max(0, ...versions.map((v) => v.version)) + 1;
   const teamName = new Map(teams.map((t) => [t.id, t.name]));
@@ -208,7 +208,11 @@ export default async function SchedulePage({
                     {unscheduled.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.name}
-                        {t.checkedIn ? "" : " (not checked in)"}
+                        {!t.checkedIn
+                          ? " (not checked in)"
+                          : t.withdrawn
+                            ? " (withdrawn earlier)"
+                            : ""}
                       </option>
                     ))}
                   </select>
