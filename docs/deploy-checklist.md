@@ -196,7 +196,13 @@ npm run bootstrap:event -- --project-ref <ref> --confirm \
       non-local database also needs `--confirm`; without it the script
       refuses before connecting.
 - [ ] It refuses if the slug already exists and never updates a row. Change
-      the judging start and help location afterwards on `/organizer/event`.
+      the judging start, help location and **check-in window** afterwards on
+      `/organizer/event`. Bootstrap doesn't set the check-in window: with
+      none, the public form is open immediately, so set it right after
+      bootstrapping (production: Saturday 09:00–11:00 PST, set 2026-11-01).
+- [ ] Make yourself an organizer: sign in once with your address, then
+      `update public.profiles set role = 'organizer' where email = '…';`
+      (docs/phase-1-spec.md, "Bootstrapping the first organizer").
 - [ ] One event per database. The organizer screens treat the newest event
       of the latest year as "the" event, so a second 2026 event would take
       over the screens. Don't create test events on production.

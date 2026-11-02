@@ -48,7 +48,7 @@ one out. **Keep a printed list of join codes at the help desk.**
 | Symptom | Cause | Fix |
 |---|---|---|
 | "You're not on a team" | Their address isn't on the roster, or is misspelled | Captain corrects it on `/team/members`. Correcting an address also kills the sign-in link sent to the typo |
-| A judge sees nothing | Not seated on a panel, or the schedule isn't published yet | Judges only see teams on **published** schedules at **their own** station |
+| A judge sees nothing on `/judge` | Not seated at a station, or the schedule isn't published yet | The page says which. `/judge` lists their own station's teams on the **published** schedule, in time order, with the current one highlighted; it refreshes itself |
 | A judge added that morning sees nothing | Should work — triggers link them on insert | If it genuinely doesn't, check they were added to a *panel*, not just the judge list |
 | Someone can't get in at all | Any of the above | Join code. Don't debug during judging |
 
@@ -63,7 +63,8 @@ one out. **Keep a printed list of join codes at the help desk.**
 | Published the wrong version | — | Publish the right one. The version number increments and teams see "v4" |
 | An old draft is sitting there looking publishable | — | Drafts older than the published version **can't** be published and are marked "superseded" |
 | A team shows up late | — | Schedules → **"Late team or dropped team"** (first section of the published schedule) |
-| A team doesn't show | — | Same place, drop them. Their seats free up for the next late team |
+| A team doesn't show | — | Same place, drop them. Their seats free up for the next late team. Once the drop is published the team is **withdrawn**: Generate leaves it unticked (and says why), so regenerating doesn't bring it back. Tick it to include it again on purpose |
+| A sponsor's judge is swapped out of a station | Nothing warns (known gap, found 2 Nov) | The Stations screen checks only double-seating, and the published schedule's coverage figure is from publish time, so it keeps saying "all covered". Before swapping an AWS or A10 judge, check which teams at that station chose the track, and replace like with like |
 | Adding a late team added 14 minutes | The schedule was exactly full | **Generate with 17 slots, not 15.** 16 spare seats absorb up to 8 late teams at no added time |
 
 **Late changes never edit the live schedule.** They copy it into a new draft
@@ -77,7 +78,7 @@ their exact station and time — that's asserted by tests.
 | Symptom | Cause | Fix |
 |---|---|---|
 | Everything 503s with "can't verify your access" | Supabase unreachable | Gated pages fail **closed** by design. Check Supabase status. Public pages and the printed schedule still work |
-| Site is up but data is stale | Venue Wi-Fi | Team pages cache the last good copy and say "last updated X ago" |
+| Site is up but data is stale | Venue Wi-Fi | A team page that is **already open** keeps its last good copy and says "last updated X ago". That only survives in an open tab: a reload, or opening the link fresh, with no connection gets the browser's offline page. The real protection is the **"Screenshot this"** on the check-in screen, and the printed schedule |
 | Supabase project is paused | Free tier pauses after ~1 week idle | Unpause in the dashboard. **Check this on 31 Oct, 6 Nov, and the morning of** |
 | A preview deployment wrote to real data | Env vars pointing at production | Preview has its **own** Supabase project. Also: no preview deploys from 5 Nov |
 | Total failure | — | The printed schedule. This is why it exists |
@@ -189,7 +190,7 @@ So nobody adds them later thinking they were forgotten:
 
 ## Before the event
 
-- [ ] **Print the schedule.** Non-negotiable
+- [ ] **Print the schedule.** Non-negotiable. Page 1 is every team A to Z with both times and stations (what the queue reads); page 2 is the station × time grid. Post both
 - [ ] Print the join codes for the help desk
 - [ ] Unpause Supabase (31 Oct, 6 Nov, morning of)
 - [ ] `pg_dump` on 6 Nov — free tier has no backups
