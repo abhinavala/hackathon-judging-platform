@@ -38,7 +38,9 @@ export async function publishSchedule(form: FormData) {
   const review = reviewSchedule(view.review);
   if (review.invalid.length)
     back(path, {
-      error: "This schedule has structural errors and can't be published.",
+      error: review.outOfDate
+        ? "This draft is out of date (a newer version is published) and can't be published."
+        : "This schedule has structural errors and can't be published.",
     });
   // Warnings unchanged from the published version a late change copies were
   // accepted when it was published; everything else needs a tick.

@@ -16,15 +16,25 @@ export async function saveEventSettings(form: FormData) {
   const event = await currentEvent(db);
   if (!event) back(PATH, { error: "No event exists yet." });
 
-  const startRaw = String(form.get("judgingStartsAt") ?? "").trim();
-  let judgingStartsAt: string | null = null;
-  if (startRaw) {
+  // A datetime-local field in the event's zone -> ISO, or null when blank.
+  const when = (field: string, label: string): string | null => {
+    const raw = String(form.get(field) ?? "").trim();
+    if (!raw) return null;
     try {
-      judgingStartsAt = zonedLocalToUtc(startRaw, event.timezone).toISOString();
+      return zonedLocalToUtc(raw, event.timezone).toISOString();
     } catch {
-      back(PATH, { error: "Enter the judging start as a date and time." });
+      back(PATH, { error: `Enter ${label} as a date and time.` });
     }
-  }
+  };
+  const judgingStartsAt = when("judgingStartsAt", "the judging start");
+  const checkinOpensAt = when("checkinOpensAt", "when check-in opens");
+  const checkinClosesAt = when("checkinClosesAt", "when check-in closes");
+  if (
+    checkinOpensAt &&
+    checkinClosesAt &&
+    Date.parse(checkinClosesAt) <= Date.parse(checkinOpensAt)
+  )
+    back(PATH, { error: "Check-in has to close after it opens." });
   const helpLocation =
     String(form.get("helpLocation") ?? "")
       .trim()
@@ -34,7 +44,12 @@ export async function saveEventSettings(form: FormData) {
 
   const { error } = await db
     .from("events")
-    .update({ judging_starts_at: judgingStartsAt, help_location: helpLocation })
+    .update({
+      judging_starts_at: judgingStartsAt,
+      help_location: helpLocation,
+      checkin_opens_at: checkinOpensAt,
+      checkin_closes_at: checkinClosesAt,
+    })
     .eq("id", event.id);
   if (error) back(PATH, { error: error.message });
   revalidatePath(PATH);

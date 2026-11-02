@@ -511,10 +511,34 @@ async function run() {
     `a judge sees exactly the ${atStation} teams at their v3 station`,
     `${judgeTeams.length}`,
   );
-  check(
-    (await get("/judge", judgeUser.cookie)).status === 200,
-    "and can open /judge",
-  );
+  {
+    const page = await get("/judge", judgeUser.cookie);
+    // The rendered markup without React's payload, tags kept so a team
+    // name is matched as a whole element (">Name<").
+    const shown = page.html.replace(/<script[\s\S]*?<\/script>/g, "");
+    const { data: mine } = await db
+      .from("assignments")
+      .select("teams(name), slots(starts_at)")
+      .eq("schedule_id", draftId)
+      .eq("panel_id", station)
+      .neq("status", "cancelled");
+    const names = mine
+      .sort((a, b) => a.slots.starts_at.localeCompare(b.slots.starts_at))
+      .map((a) => a.teams.name);
+    const { data: everyone } = await db.from("teams").select("name");
+    const others = everyone
+      .map((t) => t.name)
+      .filter((n) => !names.includes(n) && shown.includes(`>${n}<`));
+    const order = names.map((n) => shown.indexOf(`>${n}<`));
+    check(
+      page.status === 200 &&
+        names.length > 0 &&
+        order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])) &&
+        others.length === 0,
+      `the judge's page lists their ${names.length} station teams in time order, and no one else's`,
+      JSON.stringify({ missing: names.filter((n, k) => order[k] < 0), others }),
+    );
+  }
 
   // 7. CSV export.
   const csv = await get(`${draftPath}/export`, org.cookie);
@@ -1098,6 +1122,57 @@ async function run() {
       ),
     "event screen: blank clears the settings; the overview says they're unset",
   );
+
+  // The check-in window is on the same screen now.
+  {
+    const { data: before } = await db
+      .from("events")
+      .select("id, checkin_opens_at, checkin_closes_at")
+      .single();
+    r = await submit("/organizer/event", org.cookie, "checkinOpensAt", {
+      checkinOpensAt: "2099-01-02T08:45",
+      checkinClosesAt: "2099-01-02T08:00",
+    });
+    check(
+      flash(r.url) === "Check-in has to close after it opens.",
+      "event screen: a check-in window that closes before it opens is refused",
+      flash(r.url),
+    );
+    r = await submit("/organizer/event", org.cookie, "checkinOpensAt", {
+      checkinOpensAt: "2099-01-02T08:45",
+      checkinClosesAt: "2099-01-02T11:00",
+    });
+    const { data: win } = await db
+      .from("events")
+      .select("checkin_opens_at, checkin_closes_at")
+      .single();
+    const form = visible((await get("/checkin")).html);
+    check(
+      flash(r.url).startsWith("Saved.") &&
+        Date.parse(win.checkin_opens_at) ===
+          Date.parse("2099-01-02T16:45:00Z") &&
+        form.includes("Check-in opens at 8:45 AM PST"),
+      "event screen: sets when check-in opens (event zone); the form says so",
+      JSON.stringify(win),
+    );
+    r = await submit("/organizer/event", org.cookie, "checkinOpensAt", {
+      checkinOpensAt: "",
+      checkinClosesAt: "",
+    });
+    check(
+      visible((await get("/checkin")).html).includes(
+        "One person per team fills this in",
+      ),
+      "event screen: blank opens check-in with no limit",
+    );
+    await db
+      .from("events")
+      .update({
+        checkin_opens_at: before.checkin_opens_at,
+        checkin_closes_at: before.checkin_closes_at,
+      })
+      .eq("id", before.id);
+  }
   await db
     .from("events")
     .update({
@@ -1311,7 +1386,7 @@ async function run() {
   check(
     list12.includes("draft, superseded by v") &&
       list12.includes("Late team or dropped team") &&
-      /structural errors/.test(flash(r.url)),
+      /out of date/.test(flash(r.url)),
     "superseded draft: an older draft is marked superseded and can't be published",
     flash(r.url),
   );
@@ -1349,6 +1424,13 @@ async function run() {
         .every(([k, panel]) => dropSeats.get(k) === panel),
     "drop: its assignments are cancelled, nothing is re-packed, nobody else moves",
   );
+  const withdrawnAt = async () =>
+    (await db.from("teams").select("withdrawn_at").eq("id", tv.id).single())
+      .data.withdrawn_at;
+  check(
+    (await withdrawnAt()) === null,
+    "drop: drafting a drop withdraws nobody (a discarded draft must not)",
+  );
 
   // Warnings identical to the published version's are already accepted and
   // shown without a tick box; changed or new ones still need one.
@@ -1359,7 +1441,7 @@ async function run() {
   check(
     text(dropHtml).includes("Already accepted in v") &&
       !dropAcks.includes("ack:tight-spacing") &&
-      dropAcks.includes("ack:unfilled-slots") &&
+      !dropAcks.includes("ack:unfilled-slots") &&
       dropAcks.includes("ack:changes-vs-published"),
     "drop: the unchanged spacing warning is shown as already accepted; changed and new ones need a tick",
     dropAcks.join(", "),
@@ -1369,12 +1451,14 @@ async function run() {
     org.cookie,
     "I&#x27;ve reviewed this",
     Object.fromEntries(
-      dropAcks.filter((a) => a !== "ack:unfilled-slots").map((a) => [a, "on"]),
+      dropAcks
+        .filter((a) => a !== "ack:changes-vs-published")
+        .map((a) => [a, "on"]),
     ),
     { keepChecked: false },
   );
   check(
-    /Not acknowledged: \d+ empty seats/.test(flash(r.url)),
+    /Not acknowledged: Changes from the published/.test(flash(r.url)),
     "drop: publishing without ticking a CHANGED warning is refused, server-side",
     flash(r.url),
   );
@@ -1398,13 +1482,32 @@ async function run() {
     ),
     "drop: the dropped team's page says it isn't scheduled",
   );
+  check(
+    (await withdrawnAt()) !== null,
+    "drop: publishing it marks the team withdrawn (0013)",
+  );
+  {
+    const gen = (await get("/organizer/generate", org.cookie)).html;
+    const box =
+      new RegExp(`<input[^>]*value="${tv.id}"[^>]*>`).exec(gen)?.[0] ?? "";
+    check(
+      box !== "" &&
+        !/checked/.test(box) &&
+        text(gen).includes("withdrawn: dropped after publishing"),
+      "drop: Generate lists a withdrawn team unticked, and says why",
+      box,
+    );
+  }
   r = await publishDraft(stalePath);
   check(
-    /structural errors/.test(flash(r.url)) &&
+    /out of date/.test(flash(r.url)) &&
       text((await get(stalePath, org.cookie)).html).includes(
         "Publishing it would undo whatever changed since",
+      ) &&
+      text((await get("/organizer/schedules", org.cookie)).html).includes(
+        "draft, out of date (made from v",
       ),
-    "stale late change: a draft copied from an older version can't be published",
+    "stale late change: a draft copied from an older version can't be published, and the list says it's out of date",
     flash(r.url),
   );
   r = await submit(stalePath, org.cookie, "Discard draft", {});

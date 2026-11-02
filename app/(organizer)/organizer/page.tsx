@@ -33,7 +33,7 @@ export default async function OrganizerPage() {
   const emailsSending = emails.filter(
     (e) => e.status === "sending" && !e.stuck,
   ).length;
-  const checkedIn = teams.filter((t) => t.checkedIn);
+  const checkedIn = teams.filter((t) => t.checkedIn && !t.withdrawn);
   const check = preflight(
     judges.map((j) => j.affiliation),
     checkedIn.map((t) => new Set(t.sponsors)),
@@ -73,6 +73,8 @@ export default async function OrganizerPage() {
               <th>Teams checked in</th>
               <td>
                 {checkedIn.length} of {teams.length}
+                {teams.some((t) => t.withdrawn) &&
+                  ` (${teams.filter((t) => t.withdrawn).length} withdrawn)`}
               </td>
             </tr>
             <tr>

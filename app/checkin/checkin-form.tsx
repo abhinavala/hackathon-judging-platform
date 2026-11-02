@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { CheckInTrack, FieldErrors } from "@/lib/checkin/form";
+import type { CheckInTrack, FieldErrors, FormFields } from "@/lib/checkin/form";
 import { TEAMMATE_ROWS } from "@/lib/checkin/form";
 
 const input = "w-full rounded border px-3 py-2 text-base";
@@ -16,10 +16,18 @@ const label = "mb-1 block font-medium";
 export function CheckInForm({
   tracks,
   initialError,
+  initial = null,
 }: {
   tracks: CheckInTrack[];
   initialError: string | null;
+  /** What was typed before a no-JavaScript submit came back with an error. */
+  initial?: FormFields | null;
 }) {
+  const typed = (k: string) => {
+    const v = initial?.[k];
+    return typeof v === "string" ? v : undefined;
+  };
+  const picked = [initial?.track ?? []].flat();
   const [errors, setErrors] = useState<FieldErrors>(
     initialError ? { form: initialError } : {},
   );
@@ -122,6 +130,7 @@ export function CheckInForm({
             required
             className={input}
             {...aria("teamName")}
+            defaultValue={typed("teamName")}
           />
           {err("teamName")}
         </div>
@@ -142,6 +151,7 @@ export function CheckInForm({
             required
             className={input}
             {...aria("captainName")}
+            defaultValue={typed("captainName")}
           />
           {err("captainName")}
         </div>
@@ -157,6 +167,7 @@ export function CheckInForm({
             required
             className={input}
             {...aria("captainEmail")}
+            defaultValue={typed("captainEmail")}
           />
           <p className="mt-1 text-sm">
             We send your receipt and a sign-in link here.
@@ -174,6 +185,7 @@ export function CheckInForm({
             autoComplete="tel"
             className={input}
             {...aria("phone")}
+            defaultValue={typed("phone")}
           />
           {err("phone")}
         </div>
@@ -196,6 +208,7 @@ export function CheckInForm({
                 name={`teammateName${n}`}
                 className={input}
                 {...aria(`teammateName${n}`)}
+                defaultValue={typed(`teammateName${n}`)}
               />
               {err(`teammateName${n}`)}
             </div>
@@ -209,6 +222,7 @@ export function CheckInForm({
                 type="email"
                 className={input}
                 {...aria(`teammateEmail${n}`)}
+                defaultValue={typed(`teammateEmail${n}`)}
               />
               {err(`teammateEmail${n}`)}
             </div>
@@ -230,6 +244,7 @@ export function CheckInForm({
             placeholder="https://devpost.com/software/…"
             className={input}
             {...aria("devpostUrl")}
+            defaultValue={typed("devpostUrl")}
           />
           {err("devpostUrl")}
         </div>
@@ -243,6 +258,7 @@ export function CheckInForm({
             placeholder="https://github.com/you/project"
             className={input}
             {...aria("githubUrls")}
+            defaultValue={typed("githubUrls")}
           />
           {err("githubUrls")}
         </div>
@@ -261,6 +277,7 @@ export function CheckInForm({
                 type="checkbox"
                 name="track"
                 value={t.id}
+                defaultChecked={picked.includes(t.id)}
                 className="mt-1 h-5 w-5"
               />
               <span>{t.name}</span>
@@ -295,6 +312,7 @@ export function CheckInForm({
                     type="radio"
                     name={name}
                     value={v}
+                    defaultChecked={typed(name) === v}
                     required
                     className="h-5 w-5"
                   />
@@ -318,6 +336,7 @@ export function CheckInForm({
           maxLength={1000}
           className={input}
           {...aria("notes")}
+          defaultValue={typed("notes")}
         />
         {err("notes")}
       </div>

@@ -34,7 +34,8 @@ Settings, Git, Ignored Build Step to `[ "$VERCEL_ENV" != "production" ]`.
       costing every judge 14 minutes. 17 slots leave 16 empty seats: room
       for up to 8 late arrivals at no added time, and slack for the per-slot
       timing drift that builds up across a morning. The generate screen
-      suggests this by default; don't clear the field.
+      suggests this by default; don't clear the field. Those spare seats
+      don't raise a warning; only more empty seats than that do.
 - [ ] A team arrives late or leaves: on **Schedules**, click **"Late team
       or dropped team"** beside the published version. It opens straight on
       **Late changes**, the first section of a published schedule (above the
@@ -46,8 +47,16 @@ Settings, Git, Ignored Build Step to `[ "$VERCEL_ENV" != "production" ]`.
       Warnings identical to the published version's show as "Already
       accepted in vN" (still visible, no tick box). Read the ticked ones,
       above all "Changes from the published vN: 0 moved, 1 added".
-- [ ] An older draft lying around (the list says "superseded by vN") can't
-      be published: it would undo the late changes since.
+- [ ] An older draft lying around (the list says "superseded by vN", or
+      "out of date (made from vN)" for a late change drafted from an earlier
+      version) can't be published: it would undo the late changes since.
+- [ ] A dropped team is **withdrawn** once the drop is published. If you
+      ever regenerate, Generate leaves withdrawn teams unticked and says so;
+      tick one only if it really is back.
+- [ ] Judges open `/judge` on their phone (they sign in like everyone
+      else): their station, their teams in time order, the current one
+      highlighted. If a judge sees "not given a station yet", seat them on
+      **Stations**.
 
 ## Rehearse late changes in the dry run
 

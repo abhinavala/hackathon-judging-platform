@@ -588,5 +588,76 @@ begin
   delete from public.checkin_emails;
 end $$;
 
+-- ---- 0013: withdrawn_at is the organizers' --------------------------------
+do $$
+declare
+  n int; ok boolean;
+  alpha constant uuid := 'a0000000-0000-0000-0000-000000000001';
+begin
+  perform become('11111111-1111-1111-1111-111111111111');
+  begin
+    update public.teams set withdrawn_at = now() where id = alpha;
+    ok := false;
+  exception when insufficient_privilege then ok := true;
+  end;
+  perform test_assert(ok, '0013: a captain cannot withdraw their own team');
+  update public.teams set devpost_url = 'https://devpost.com/software/alpha' where id = alpha;
+  get diagnostics n = row_count;
+  perform test_assert(n = 1, '0013: and can still edit the team''s details');
+  reset role;
+
+  perform become('55555555-5555-5555-5555-555555555555');
+  update public.teams set withdrawn_at = now() where id = alpha;
+  get diagnostics n = row_count;
+  perform test_assert(n = 1, '0013: an organizer can withdraw a team');
+  reset role;
+
+  perform become('11111111-1111-1111-1111-111111111111');
+  begin
+    update public.teams set withdrawn_at = null where id = alpha;
+    ok := false;
+  exception when insufficient_privilege then ok := true;
+  end;
+  perform test_assert(ok, '0013: a captain cannot un-withdraw their team');
+  reset role;
+
+  update public.teams set withdrawn_at = null, devpost_url = null where id = alpha;
+end $$;
+
+-- ---- 0013: publish_schedule() withdraws and un-withdraws -------------------
+do $$
+declare
+  ok boolean;
+  alpha constant uuid := 'a0000000-0000-0000-0000-000000000001';
+  bravo constant uuid := 'a0000000-0000-0000-0000-000000000002';
+  v3    constant uuid := '50000000-0000-0000-0000-000000000003';
+begin
+  -- A late drop of Alpha that still seats Bravo, who was withdrawn earlier.
+  update public.teams set withdrawn_at = now() where id = bravo;
+  insert into public.schedules (id, event_id, version, status, round, stats)
+  values (v3, 'e0000000-0000-0000-0000-000000000001', 3, 'draft', 1,
+          jsonb_build_object('lateChange', jsonb_build_object('kind', 'drop', 'teamId', alpha)));
+  insert into public.slots (id, schedule_id, index, starts_at, ends_at) values
+    ('53000000-0000-0000-0000-000000000001', v3, 0, '2026-02-28 09:40-08', '2026-02-28 09:47-08');
+  insert into public.assignments (schedule_id, team_id, panel_id, slot_id, status) values
+    (v3, alpha, 'b0000000-0000-0000-0000-000000000001', '53000000-0000-0000-0000-000000000001', 'cancelled'),
+    (v3, bravo, 'b0000000-0000-0000-0000-000000000002', '53000000-0000-0000-0000-000000000001', 'scheduled');
+
+  perform become('55555555-5555-5555-5555-555555555555');
+  perform public.publish_schedule(v3);
+  reset role;
+
+  select withdrawn_at is not null into ok from public.teams where id = alpha;
+  perform test_assert(ok, '0013: publishing a late drop withdraws the dropped team');
+  select withdrawn_at is null into ok from public.teams where id = bravo;
+  perform test_assert(ok, '0013: publishing a version that seats a withdrawn team un-withdraws it');
+
+  -- Put the fixture back as it was.
+  delete from public.schedules where id = v3;
+  update public.schedules set status = 'published'
+   where id = '50000000-0000-0000-0000-000000000002';
+  update public.teams set withdrawn_at = null where id in (alpha, bravo);
+end $$;
+
 \echo ''
 \echo '================= ALL PHASE 1 ACCEPTANCE TESTS PASSED ================='

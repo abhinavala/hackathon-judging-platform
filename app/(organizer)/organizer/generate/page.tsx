@@ -31,10 +31,14 @@ export default async function GeneratePage({
     loadTeams(db, event.id),
     loadSchedules(db, event.id),
   ]);
-  const checkedIn = teams.filter((t) => t.checkedIn);
+  // Ticked by default: checked in and not withdrawn (dropped by a
+  // published late change). Withdrawn teams stay listed, unticked, so an
+  // organizer can bring one back on purpose.
+  const included = teams.filter((t) => t.checkedIn && !t.withdrawn);
+  const withdrawn = teams.filter((t) => t.checkedIn && t.withdrawn);
   const check = preflight(
     judges.map((j) => j.affiliation),
-    checkedIn.map((t) => new Set(t.sponsors)),
+    included.map((t) => new Set(t.sponsors)),
   );
   const nextVersion = Math.max(0, ...schedules.map((s) => s.version)) + 1;
   const staffed = stations.filter((s) => s.judgeIds.length === 2).length;
@@ -79,8 +83,10 @@ export default async function GeneratePage({
 
       <Section title="Pre-flight">
         <p className="text-sm">
-          {judges.length} judges, {checkedIn.length} checked-in teams →{" "}
-          {check.nPanels} stations × {check.nSlots} slots.{" "}
+          {judges.length} judges, {included.length} checked-in teams
+          {withdrawn.length > 0 &&
+            ` (not counting ${withdrawn.length} withdrawn)`}{" "}
+          → {check.nPanels} stations × {check.nSlots} slots.{" "}
           {check.warnings.length === 0
             ? "Every track can be fully covered."
             : `${check.warnings.length} track${check.warnings.length === 1 ? "" : "s"} cannot be fully covered (see Judges).`}
@@ -168,7 +174,7 @@ export default async function GeneratePage({
         </Section>
 
         <Section
-          title={`Teams (${checkedIn.length} of ${teams.length} checked in, checked by default)`}
+          title={`Teams (${included.length} of ${teams.length} ticked: the checked-in ones${withdrawn.length ? `, except ${withdrawn.length} withdrawn` : ""})`}
         >
           <table className={table}>
             <thead>
@@ -187,13 +193,21 @@ export default async function GeneratePage({
                       type="checkbox"
                       name="team"
                       value={t.id}
-                      defaultChecked={t.checkedIn}
+                      defaultChecked={t.checkedIn && !t.withdrawn}
                       aria-label={`Include ${t.name}`}
                     />
                   </td>
-                  <td>{t.name}</td>
+                  <td className={t.withdrawn ? "font-semibold" : ""}>
+                    {t.name}
+                  </td>
                   <td>{t.tracks.join(", ") || "grand prize only"}</td>
-                  <td>{t.checkedIn ? "yes" : "no"}</td>
+                  <td>
+                    {!t.checkedIn
+                      ? "no"
+                      : t.withdrawn
+                        ? "withdrawn: dropped after publishing. Tick to include it again."
+                        : "yes"}
+                  </td>
                 </tr>
               ))}
             </tbody>
