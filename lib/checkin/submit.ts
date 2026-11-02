@@ -32,6 +32,8 @@ export type CheckInResult =
       joinCode: string;
       /** How many teammates are being emailed an invitation. */
       invited: number;
+      /** Their addresses: shown to the captain once, so a typo is caught. */
+      invitedEmails: string[];
     }
   | { ok: false; errors: FieldErrors };
 
@@ -217,7 +219,12 @@ export async function submitCheckIn(
     );
   }
   waitUntil(deliverCheckInEmails(teamId, people, data));
-  return { ok: true, joinCode, invited: c.teammates.length };
+  return {
+    ok: true,
+    joinCode,
+    invited: c.teammates.length,
+    invitedEmails: c.teammates.map((t) => t.email),
+  };
 }
 
 /** Mints and sends the receipt and invitations, then records the outcome. */

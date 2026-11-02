@@ -133,7 +133,29 @@ export default async function SchedulePage({
         </div>
       )}
 
-      {isDraft ? (
+      {isDraft && review.outOfDate ? (
+        // No publish form at all: it can't succeed, and a page full of tick
+        // boxes above a greyed-out button reads as something to do.
+        <div className="mb-8 rounded border-2 p-4">
+          <p className="font-semibold">This draft can&apos;t be published.</p>
+          <p className="mt-1 text-sm">
+            {view.published ? (
+              <>
+                Make the change again from{" "}
+                <Link
+                  href={`/organizer/schedules/${view.published.id}#late-changes`}
+                  className="underline"
+                >
+                  the published v{view.published.version}
+                </Link>
+                , and discard this draft (at the bottom of the page).
+              </>
+            ) : (
+              "Discard it (at the bottom of the page) and generate a new one."
+            )}
+          </p>
+        </div>
+      ) : isDraft ? (
         <form action={publishSchedule} className="mb-8 rounded border-2 p-4">
           <input type="hidden" name="scheduleId" value={schedule.id} />
           <h2 className="mb-2 text-lg font-semibold">

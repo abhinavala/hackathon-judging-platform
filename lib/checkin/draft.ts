@@ -44,3 +44,28 @@ export function decodeDraft(value: string | undefined): FormFields | null {
     return null;
   }
 }
+
+// The addresses a check-in just invited, for the captain's own welcome screen
+// only: a 10-minute cookie scoped to that team's page, so they reach the
+// browser that submitted the form and never the URL (anyone with the join
+// code can open /t/CODE, and it shows no addresses).
+export const INVITED_COOKIE = "checkin-invited";
+export const INVITED_MAX_AGE = 600; // seconds
+
+export function encodeInvited(emails: string[]): string {
+  return Buffer.from(JSON.stringify(emails.slice(0, 10))).toString("base64url");
+}
+
+export function decodeInvited(value: string | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(
+      Buffer.from(value, "base64url").toString("utf8"),
+    );
+    return Array.isArray(parsed)
+      ? parsed.filter((x): x is string => typeof x === "string").slice(0, 10)
+      : [];
+  } catch {
+    return [];
+  }
+}
