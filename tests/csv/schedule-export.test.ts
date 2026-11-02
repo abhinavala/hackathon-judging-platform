@@ -5,7 +5,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseCsv } from "../../lib/csv/csv.ts";
 import {
+  scheduleGrid,
   scheduleToCsv,
+  teamIndex,
   type ExportCell,
 } from "../../lib/csv/schedule-export.ts";
 import { solve, type Sponsor } from "../../lib/scheduler/index.ts";
@@ -139,5 +141,68 @@ test("two teams in one station-slot is refused", () => {
         timeZone: "America/Los_Angeles",
       }),
     /Two teams at one station/,
+  );
+});
+
+test("the team index lists every team A to Z with its sessions in time order, matching the grid", () => {
+  const sched = { ...eventSchedule(), timeZone: "America/Los_Angeles" };
+  const index = teamIndex(sched);
+  assert.equal(index.length, 60);
+  const names = index.map((t) => t.team);
+  assert.deepEqual(
+    names,
+    [...names].sort((a, b) =>
+      a.localeCompare(b, "en", { sensitivity: "base" }),
+    ),
+  );
+  // Every grid cell appears in the index, at the same time and station.
+  const { header, rows } = scheduleGrid(sched);
+  let cells = 0;
+  for (const row of rows)
+    row.slice(1).forEach((team, i) => {
+      if (!team) return;
+      cells++;
+      const entry = index.find((t) => t.team === team)!;
+      assert.ok(
+        entry.sessions.some(
+          (s) => s.station === row[0] && s.time === header[i + 1],
+        ),
+        `${team} at ${row[0]} ${header[i + 1]}`,
+      );
+    });
+  assert.equal(
+    cells,
+    index.reduce((n, t) => n + t.sessions.length, 0),
+  );
+  // Time order within a team, by slot (not by the clock string).
+  for (const t of index) {
+    const cols = t.sessions.map((s) => header.indexOf(s.time));
+    assert.deepEqual(
+      cols,
+      [...cols].sort((a, b) => a - b),
+      t.team,
+    );
+  }
+});
+
+test("the team index sorts without regard to case", () => {
+  const idx = teamIndex({
+    stations: [{ id: "a", label: "Station 1" }],
+    slots: [
+      { id: "s1", index: 0, startsAt: START },
+      { id: "s2", index: 1, startsAt: "2026-11-08T10:07:00-08:00" },
+    ],
+    cells: [
+      { stationId: "a", slotId: "s2", teamName: "zeta" },
+      { stationId: "a", slotId: "s1", teamName: "Alpha" },
+    ],
+    timeZone: "America/Los_Angeles",
+  });
+  assert.deepEqual(
+    idx.map((t) => [t.team, t.sessions[0].time]),
+    [
+      ["Alpha", "10:00 AM"],
+      ["zeta", "10:07 AM"],
+    ],
   );
 });

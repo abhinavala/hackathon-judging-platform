@@ -64,6 +64,51 @@ export function scheduleGrid({
   return { header, rows };
 }
 
+export type TeamTimes = {
+  team: string;
+  /** In time order: when and where. */
+  sessions: { time: string; station: string }[];
+};
+
+/**
+ * The same assignments the grid shows, turned around: every team A to Z with
+ * its presentations in time order. On the wall this is what a queue reads
+ * (find your name, not your cell in a station x time matrix).
+ */
+export function teamIndex({
+  stations,
+  slots,
+  cells,
+  timeZone,
+}: ScheduleExport): TeamTimes[] {
+  const station = new Map(stations.map((s) => [s.id, s.label]));
+  const slot = new Map(slots.map((s) => [s.id, s]));
+  const byTeam = new Map<
+    string,
+    { index: number; time: string; station: string }[]
+  >();
+  for (const c of cells) {
+    const sl = slot.get(c.slotId);
+    const st = station.get(c.stationId);
+    if (!sl || !st) continue;
+    const list = byTeam.get(c.teamName) ?? [];
+    list.push({
+      index: sl.index,
+      time: slotLabel(sl.startsAt, timeZone),
+      station: st,
+    });
+    byTeam.set(c.teamName, list);
+  }
+  return [...byTeam]
+    .sort(([a], [b]) => a.localeCompare(b, "en", { sensitivity: "base" }))
+    .map(([team, list]) => ({
+      team,
+      sessions: list
+        .sort((a, b) => a.index - b.index)
+        .map(({ time, station }) => ({ time, station })),
+    }));
+}
+
 export function scheduleToCsv(schedule: ScheduleExport): string {
   const { header, rows } = scheduleGrid(schedule);
   return formatCsv([header, ...rows.map((r) => r.map(spreadsheetSafe))]);
