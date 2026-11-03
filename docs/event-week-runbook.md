@@ -29,8 +29,12 @@ Settings, Git, Ignored Build Step to `[ "$VERCEL_ENV" != "production" ]`.
 ## The help desk: what to say
 
 For whoever staffs the help location on Saturday and Sunday. Have the
-printed **list of join codes** (organizer: print it from the team list
-before check-in closes) and the printed schedule.
+printed schedule, and a printed **list of every team's join code**. The
+site has no screen that lists join codes yet (an organizer only sees a
+team's code when its emails failed), so until it does, ask for the list to
+be exported from the database after check-in closes. Without it, a team's
+code is on its captain's check-in screenshot and in every email the team
+was sent.
 
 | They say | Say / do |
 |---|---|
