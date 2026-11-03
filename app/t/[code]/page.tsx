@@ -3,6 +3,8 @@ import { connection } from "next/server";
 import { loadTeamView } from "@/lib/team/load";
 import { normalizeCode, type TeamView } from "@/lib/team/view";
 import { siteUrl } from "@/lib/server-env";
+import { cookies } from "next/headers";
+import { INVITED_COOKIE, decodeInvited } from "@/lib/checkin/draft";
 import { TeamViewClient } from "./team-view";
 
 // Renders on the server first (so the times show even if JavaScript never
@@ -43,6 +45,10 @@ export default async function TeamPage({
               // the deployment's own URL on a preview.
               site: siteUrl(),
               invited: Number(query.invited) || 0,
+              // The addresses, only in the browser that just checked in.
+              invitedEmails: decodeInvited(
+                (await cookies()).get(INVITED_COOKIE)?.value,
+              ),
             }
           : null
       }

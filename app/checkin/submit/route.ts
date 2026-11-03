@@ -1,4 +1,11 @@
-import { DRAFT_COOKIE, DRAFT_MAX_AGE, encodeDraft } from "@/lib/checkin/draft";
+import {
+  DRAFT_COOKIE,
+  DRAFT_MAX_AGE,
+  INVITED_COOKIE,
+  INVITED_MAX_AGE,
+  encodeDraft,
+  encodeInvited,
+} from "@/lib/checkin/draft";
 import { fieldsFromFormData, type FormFields } from "@/lib/checkin/form";
 import { loadCheckInEvent, submitCheckIn } from "@/lib/checkin/submit";
 import { helpPlace } from "@/lib/event/copy";
@@ -61,16 +68,25 @@ function reply(
     : `/checkin?${new URLSearchParams({
         error: result.errors.form ?? Object.values(result.errors)[0],
       })}`;
-  if (wantsJson)
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  // Who was invited, for the captain's welcome screen only (a cookie on
+  // this team's page, never the URL).
+  const invited = result.ok
+    ? `${INVITED_COOKIE}=${encodeInvited(result.invitedEmails)}; Path=/t/${result.joinCode}; Max-Age=${INVITED_MAX_AGE}; HttpOnly; SameSite=Lax${secure}`
+    : null;
+  if (wantsJson) {
+    const headers = new Headers({ "cache-control": "no-store" });
+    if (invited) headers.append("Set-Cookie", invited);
     return Response.json(result.ok ? { ok: true, redirect: to } : result, {
       status: result.ok ? 200 : errorStatus,
-      headers: { "cache-control": "no-store" },
+      headers,
     });
+  }
   // Without JavaScript the browser leaves the form: keep what was typed for
   // it to fill back in (lib/checkin/draft.ts), and forget it on success.
   const headers = new Headers({ Location: to });
+  if (invited) headers.append("Set-Cookie", invited);
   const draft = !result.ok && fields ? encodeDraft(fields) : null;
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
   headers.append(
     "Set-Cookie",
     draft

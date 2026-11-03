@@ -27,6 +27,7 @@ Email is the most likely thing to misbehave, which is why the join code exists.
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
+| Testing on a **preview** deployment (`…-abhinavtala-7547s-projects.vercel.app`): "We couldn't send your sign-in link", or invitations that never arrive | **Expected. No preview emails real people.** Preview deployments have no sender configured (`AUTH_LINK_SENDER` is unset for Preview), so every send fails, and a sign-in request fails before it reaches Supabase. The one exception is a build of the `smtp-sender` branch, whose sends all go to the two test inboxes (`AUTH_LINK_REDIRECT_TO`), with the real recipient in the subject | Test email on the production address only. Every link in a test email points at the preview it came from, so following one lands you on a preview's sign-in page, which can't send (found 2 Nov after an afternoon on it) |
 | Nobody receives anything | `AUTH_LINK_SENDER` not `smtp`, or the App Password was revoked or changed | Check the Vercel env vars; `npm run mail:dry-run -- --ping` logs in without sending. Meanwhile, join codes |
 | Organizer dashboard lists "Check-in emails not sent" | Those addresses got nothing at check-in (the emails go out after the captain is answered) | Read the team's join code out, or the captain fixes the address and resends on `/team/members`, which clears the entry |
 | A team stuck at "sending" on the dashboard | The background send was cut short | Same: join code, and the captain can resend |

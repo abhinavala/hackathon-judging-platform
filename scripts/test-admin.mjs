@@ -348,6 +348,22 @@ async function run() {
     `${r.status} ${r.location}`,
   );
   const draftPath = r.url.pathname;
+  // A real publish form, kept for forging publishes of drafts whose pages
+  // (rightly) no longer offer one: the server must refuse those too.
+  const publishFormHtml = findForm(
+    (await get(draftPath, org.cookie)).html,
+    "I&#x27;ve reviewed this",
+  );
+  const forgePublish = async (path) => {
+    const res = await fetch(BASE + path, {
+      method: "POST",
+      body: formData(publishFormHtml, { scheduleId: path.split("/").pop() }),
+      headers: { cookie: org.cookie },
+      redirect: "manual",
+    });
+    const loc = res.headers.get("location");
+    return { url: loc ? new URL(loc, BASE) : null };
+  };
   const draftId = draftPath.split("/").pop();
   const { data: draft } = await db
     .from("schedules")
@@ -1092,13 +1108,18 @@ async function run() {
     ),
     "generate: the start defaults to the event's judging start",
   );
-  const { data: aDraft } = await db
-    .from("schedules")
-    .select("id")
-    .eq("status", "draft")
-    .order("version")
-    .limit(1)
-    .single();
+  // A fresh draft starting at 10:00 (the old drafts are out of date now,
+  // and an out-of-date draft shows no publish form, so no warnings).
+  r = await submit(
+    "/organizer/generate",
+    org.cookie,
+    "regenerateAfterPublish",
+    {
+      start: "2026-11-08T10:00",
+      regenerateAfterPublish: "on",
+    },
+  );
+  const aDraft = { id: r.url?.pathname.split("/").pop() };
   const draftPreview = await get(
     `/organizer/schedules/${aDraft.id}`,
     org.cookie,
@@ -1122,6 +1143,7 @@ async function run() {
       ),
     "event screen: blank clears the settings; the overview says they're unset",
   );
+  await db.from("schedules").delete().eq("id", aDraft.id);
 
   // The check-in window is on the same screen now.
   {
@@ -1382,12 +1404,17 @@ async function run() {
     .eq("version", 2)
     .single();
   const list12 = text((await get("/organizer/schedules", org.cookie)).html);
-  r = await publishDraft(`/organizer/schedules/${seedDraft.id}`);
+  const seedPage = (
+    await get(`/organizer/schedules/${seedDraft.id}`, org.cookie)
+  ).html;
+  r = await forgePublish(`/organizer/schedules/${seedDraft.id}`);
   check(
-    list12.includes("draft, superseded by v") &&
+    !seedPage.includes("I&#x27;ve reviewed this") &&
+      text(seedPage).includes("This draft can't be published") &&
+      list12.includes("draft, superseded by v") &&
       list12.includes("Late team or dropped team") &&
       /out of date/.test(flash(r.url)),
-    "superseded draft: an older draft is marked superseded and can't be published",
+    "superseded draft: marked superseded, no publish form, and a forged publish is refused",
     flash(r.url),
   );
   const pub12 = (await get(insertPath, org.cookie)).html;
@@ -1498,16 +1525,34 @@ async function run() {
       box,
     );
   }
-  r = await publishDraft(stalePath);
+  // The stale draft's page has no publish form at all, only the reason. A
+  // forged publish (the real form from another draft, this draft's id) is
+  // still refused by the server.
+  const staleHtml = (await get(stalePath, org.cookie)).html;
+  {
+    const forged = formData(findForm(dropHtml, "I&#x27;ve reviewed this"), {
+      scheduleId: stalePath.split("/").pop(),
+    });
+    const res = await fetch(BASE + stalePath, {
+      method: "POST",
+      body: forged,
+      headers: { cookie: org.cookie },
+      redirect: "manual",
+    });
+    const loc = res.headers.get("location");
+    r = { url: loc ? new URL(loc, BASE) : null };
+  }
   check(
-    /out of date/.test(flash(r.url)) &&
+    !staleHtml.includes("I&#x27;ve reviewed this") &&
+      text(staleHtml).includes("This draft can't be published") &&
+      /out of date/.test(flash(r.url)) &&
       text((await get(stalePath, org.cookie)).html).includes(
         "Publishing it would undo whatever changed since",
       ) &&
       text((await get("/organizer/schedules", org.cookie)).html).includes(
         "draft, out of date (made from v",
       ),
-    "stale late change: a draft copied from an older version can't be published, and the list says it's out of date",
+    "stale late change: no publish form, just the reason; a forged publish is refused; the list says it's out of date",
     flash(r.url),
   );
   r = await submit(stalePath, org.cookie, "Discard draft", {});
@@ -1669,6 +1714,26 @@ async function run() {
       !welcomePage.includes("riley.park"),
     "check-in: answers before sending, says where the code works, and shows no address",
   );
+  {
+    // The captain's own browser got a cookie naming who was invited; the
+    // same link opened anywhere else shows no addresses. The address of the
+    // team page appears once.
+    const invitedCookie = res13.headers
+      .getSetCookie()
+      .find((c) => c.startsWith("checkin-invited="))
+      ?.split(";")[0];
+    const mine = visible((await get(welcome, invitedCookie)).html);
+    const theirs = visible((await get(welcome)).html);
+    check(
+      mine.includes("sam.ortiz@scu.example") &&
+        mine.includes("jo.lee@scu.example") &&
+        mine.includes("Fix it on your teammates page") &&
+        !theirs.includes("sam.ortiz@scu.example") &&
+        mine.split(`/t/${newCode}`).length === 2,
+      "check-in: the captain's screen lists who was invited (not shown without their cookie), and the page's URL appears once",
+      String(mine.split(`/t/${newCode}`).length - 1),
+    );
+  }
   // The emails go out after the answer (waitUntil). Here the sender refuses
   // under next start, so the outcome must be recorded as failed, for every
   // address, and shown to organizers: never lost silently.

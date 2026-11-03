@@ -64,6 +64,7 @@ export function TeamViewClient({
   welcome?: {
     site: string;
     invited: number;
+    invitedEmails: string[];
   } | null;
 }) {
   const [live, setLive] = useState<Saved | null>(
@@ -365,11 +366,16 @@ function Welcome({
   code,
   site,
   invited,
+  invitedEmails,
 }: {
   code: string;
   site: string;
   invited: number;
+  invitedEmails: string[];
 }) {
+  // The address once, as a link, without the scheme; the second mention is
+  // only the host, where the home page's code box is.
+  const host = site.replace(/^https?:\/\//, "");
   return (
     <section
       role="status"
@@ -379,23 +385,39 @@ function Welcome({
       <p className="mt-3 text-lg">Your team&apos;s join code:</p>
       <p className="font-mono text-5xl font-extrabold tracking-wider">{code}</p>
       <p className="mt-2">
-        Screenshot this. Your judging times are at{" "}
+        Screenshot this. It shows your team&apos;s judging times on any phone,
+        no sign-in needed:{" "}
         <Link className="font-semibold break-all underline" href={`/t/${code}`}>
-          {site}/t/{code}
-        </Link>{" "}
-        on any phone, no sign-in needed. Or go to{" "}
-        <Link className="font-semibold break-all underline" href="/t">
-          {site}/t
-        </Link>{" "}
-        and enter the code.
+          {host}/t/{code}
+        </Link>
       </p>
       <p className="mt-3">
         We&apos;re emailing you a receipt and a sign-in link
-        {invited > 0
+        {invited > 0 && invitedEmails.length === 0
           ? `, and an invitation to ${invited === 1 ? "your teammate" : `your ${invited} teammates`}`
           : ""}
-        . If anything hasn&apos;t arrived in a few minutes, share the code and{" "}
-        {site}/t: that&apos;s all anyone needs.
+        .
+      </p>
+      {invitedEmails.length > 0 && (
+        <div className="mt-3">
+          <p>And inviting:</p>
+          <ul className="mt-1 list-disc pl-6 font-mono text-sm break-all">
+            {invitedEmails.map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+          <p className="mt-1 text-sm">
+            Spot a typo?{" "}
+            <Link className="underline" href="/team/members">
+              Fix it on your teammates page
+            </Link>{" "}
+            after you sign in from your email.
+          </p>
+        </div>
+      )}
+      <p className="mt-3">
+        If an email doesn&apos;t arrive, the code is all anyone needs: open the
+        link above, or enter the code at <strong>{host}</strong>.
       </p>
     </section>
   );
