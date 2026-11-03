@@ -26,6 +26,54 @@ Settings, Git, Ignored Build Step to `[ "$VERCEL_ENV" != "production" ]`.
 - [ ] Don't run `stress:checkin` or a dry run on Friday or Saturday: every
       test send counts against the account's 2,000/day (rolling 24 hours).
 
+## The help desk: what to say
+
+For whoever staffs the help location on Saturday and Sunday. Have the
+printed schedule, and a printed **list of every team's join code**. The
+site has no screen that lists join codes yet (an organizer only sees a
+team's code when its emails failed), so until it does, ask for the list to
+be exported from the database after check-in closes. Without it, a team's
+code is on its captain's check-in screenshot and in every email the team
+was sent.
+
+| They say | Say / do |
+|---|---|
+| "My link says already used" or "expired" | Normal: a sign-in link works once and for 4 hours, and some email systems open links by themselves. Two fixes, either is fine: on the site's sign-in page, enter their email for a new link; or **give them their team's join code** and send them to the site's home page, where the code box shows their times with no sign-in |
+| "I never got an email" | Check the address with them (a typo is the usual cause). Their captain can fix it on the team page under "Fix a teammate's email", which sends a new invitation. Meanwhile, the join code |
+| "Where do I go? When am I on?" | The join code on the home page, or the printed schedule: page 1 is every team A to Z with both times and stations |
+| "Our team isn't in the schedule" | Before the schedule is published (Saturday), that's expected: their page says so. After it's published: the organizer adds them as a late team |
+| "It says I'm not on a team" | They signed in with an address their captain didn't list. The captain adds them on the team page, or use the join code |
+| Anything else, or a queue | The join code first; debug later |
+
+## Check-in: the dashboard watcher
+
+**Watcher:** ______________________ (one person, the whole of Saturday
+check-in, with a laptop signed in as an organizer)
+
+You're making sure every team's emails actually went out. When a team checks
+in, the site emails the captain a receipt and each teammate an invitation, in
+the background. Usually this takes a few seconds. If it fails, nobody is told
+except this screen.
+
+1. Open the organizer **Overview** (`/organizer`) and reload it every few
+   minutes. Look at the **Check-in emails** row: "N team(s) all sent" is
+   good.
+2. If a section called **Check-in emails not sent** appears, it lists each
+   team with its **join code** and the addresses that got nothing:
+   - **An address is listed** (often a typo): find that team's captain (the
+     team name is on the list; ask at the check-in table), show them the
+     address, and have them fix it on their team page under "Fix a
+     teammate's email". Fixing it sends a new invitation and the row
+     disappears.
+   - **It says "possibly everyone" and "still sending"**: the emails were cut
+     short. Give the captain the **join code** from the list: it works on any
+     phone at the site's `/t` page, no email needed. Then tell the organizer
+     running the event.
+3. If several teams appear at once, stop checking teams one by one and tell
+   the organizer: the email itself may be down. The join codes still work.
+
+Nothing retries a failed email by itself. You are the retry.
+
 ## Generate the real schedule with slack
 
 - [ ] **Generate with 2 slots above the minimum, not at it.** For 60 teams
@@ -36,6 +84,14 @@ Settings, Git, Ignored Build Step to `[ "$VERCEL_ENV" != "production" ]`.
       timing drift that builds up across a morning. The generate screen
       suggests this by default; don't clear the field. Those spare seats
       don't raise a warning; only more empty seats than that do.
+- [ ] **Straight after publishing, post the announcement.** Not optional:
+      there is no schedule email (by decision), so this is the message that
+      the schedule is out. **Announcements**, level Info, exactly:
+
+      > The judging schedule is live. Your times and station are on your
+      > team page.
+
+      Then check it on the board and on one team's page within 25 seconds.
 - [ ] A team arrives late or leaves: on **Schedules**, click **"Late team
       or dropped team"** beside the published version. It opens straight on
       **Late changes**, the first section of a published schedule (above the

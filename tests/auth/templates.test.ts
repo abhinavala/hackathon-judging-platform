@@ -69,36 +69,41 @@ test("every template renders exactly what the Apps Script relay renders", () => 
       }
 });
 
-test("the code box says where to use the code, as visible URLs from the link's site", () => {
+test("the code box: the code as the hero, the address once and without https://, the code never expiring", () => {
   for (const t of TEMPLATES) {
     const e = render(t, LINK, {
       teamName: "ShelterLink",
       joinCode: "ABCD-1234",
     });
-    // Linked AND written out, so a client that drops links still shows it.
+    // The code, large; and that it outlives the 4-hour link.
+    assert.ok(e.html.includes("font-size:24px"), t);
+    assert.ok(e.html.includes(">ABCD-1234</p>"), t);
+    assert.ok(
+      e.html.includes("Your team code works any time, no sign-in needed"),
+      t,
+    );
+    // The link keeps its scheme; the text people read doesn't, and says it once.
     assert.ok(
       e.html.includes(
-        '<a href="https://judging.example/t/ABCD-1234" style="color:#1a1a19">https://judging.example/t/ABCD-1234</a>',
+        '<a href="https://judging.example/t/ABCD-1234" style="color:#1a1a19">judging.example/t/ABCD-1234</a>',
       ),
       t,
     );
-    assert.ok(
-      e.html.includes(
-        '<a href="https://judging.example/t" style="color:#1a1a19">https://judging.example/t</a> and enter your team code',
-      ),
-      t,
-    );
+    const visible = e.html.replace(/<[^>]+>/g, " ");
+    assert.equal(visible.split("judging.example/t/ABCD-1234").length - 1, 1, t);
+    assert.ok(!visible.includes("https://judging.example/t"), t);
     assert.ok(
       e.text.endsWith(
-        "If the link does not work, see your schedule at https://judging.example/t/ABCD-1234, or go to https://judging.example/t and enter your team code ABCD-1234.",
+        "Your team code works any time, no sign-in needed: ABCD-1234\nYour schedule: judging.example/t/ABCD-1234",
       ),
       t,
     );
+    assert.equal(e.text.split("judging.example/t/").length - 1, 1, t);
   }
   const local = render("signin", "http://127.0.0.1:3000/auth/callback?x=1", {
     joinCode: "ABCD-1234",
   });
-  assert.match(local.text, /at http:\/\/127\.0\.0\.1:3000\/t\/ABCD-1234,/);
+  assert.match(local.text, /Your schedule: 127\.0\.0\.1:3000\/t\/ABCD-1234$/);
   // No code, no box.
   assert.doesNotMatch(render("signin", LINK, {}).html, /team code/);
 });
@@ -125,6 +130,6 @@ test("the plain-text part restores escaped characters and carries the link and c
   assert.match(e.text, /^R&D "Lab" is checked in\n\n/);
   assert.match(e.text, /We emailed 2 teammates invitations/);
   assert.ok(e.text.includes(`\n\n${LINK}\n\n`));
-  assert.match(e.text, /enter your team code ABCD-1234\.$/);
+  assert.match(e.text, /no sign-in needed: ABCD-1234\nYour schedule: /);
   assert.doesNotMatch(e.text, /<|&amp;|&quot;/);
 });

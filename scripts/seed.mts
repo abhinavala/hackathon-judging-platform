@@ -805,15 +805,8 @@ async function main() {
     );
   }
 
-  await upsert("announcements", [
-    {
-      id: seedId(`${EVENT_SLUG}/announcement/judging-starts`),
-      event_id: eventId,
-      body: "Judging starts at 10:00. Find your station on the board and be there 5 minutes early.",
-      level: "info",
-      active: true,
-    },
-  ]);
+  // No seeded announcement: an event starts with none, and a leftover
+  // "find your station" banner contradicted the not-yet-published state.
 
   const organizer = await ensureOrganizer(db);
 

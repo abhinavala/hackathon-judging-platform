@@ -180,10 +180,15 @@ So nobody adds them later thinking they were forgotten:
 
 - **A fallback email sender.** The join code is the fallback: no account, no
   inbox, tested.
-- **A "schedule is published" email.** Everyone holds a session from
-  check-in, the board announces it, and the announcement banner covers the
-  rest. It would also have been the only large batch send. The `schedule`
-  template exists; nothing sends it.
+- **A "schedule is published" email (deferred, 2 Nov 2026).** Publishing
+  would have to send ~248 messages in one background job, a send path at a
+  scale never exercised, three days before the event; the check-in emails
+  are ~4 per team, spread over a morning. Judging is Sunday morning and
+  everyone is in the room by then, so the board, the printed schedule, the
+  announcement posted straight after publishing (event-week-runbook.md) and
+  team pages that update themselves cover it. No page promises this email.
+  The `schedule` template exists; nothing sends it. Worth revisiting for a
+  year where judging isn't in the same room the next morning.
 - **AWS credential distribution.** ACM's existing script still sends
   credentials. The `credentials` template is unused.
 

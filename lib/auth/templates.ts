@@ -119,23 +119,26 @@ function wrap(
   // when the link has expired or never arrived. Written out as visible URLs,
   // because forwarded mail and some clients drop buttons.
   const site = siteOf(link);
+  // The code is the hero: it never expires, unlike the link above it, so a
+  // teammate reading this the next morning still has a way in. The address
+  // once, without the scheme.
+  const host = site.replace(/^https?:\/\//, "");
   const codeBlock = code
-    ? '<p style="margin:24px 0 0;padding:12px 16px;background:#f4f4f2;border-radius:8px;' +
-      'font-size:14px;color:#3d3d3a">If the link does not work, see your schedule at ' +
-      (site
-        ? '<a href="' +
-          esc(site + "/t/" + code) +
-          '" style="color:#1a1a19">' +
-          esc(site + "/t/" + code) +
-          '</a>, or go to <a href="' +
-          esc(site + "/t") +
-          '" style="color:#1a1a19">' +
-          esc(site + "/t") +
-          "</a> and enter "
-        : "the team page with ") +
-      'your team code <strong style="font-family:monospace;font-size:16px">' +
+    ? '<div style="margin:24px 0 0;padding:12px 16px;background:#f4f4f2;border-radius:8px;' +
+      'font-size:14px;color:#3d3d3a">' +
+      '<p style="margin:0">Your team code works any time, no sign-in needed:</p>' +
+      '<p style="margin:4px 0;font-family:monospace;font-size:24px;font-weight:700;' +
+      'letter-spacing:2px;color:#1a1a19">' +
       esc(code) +
-      "</strong>.</p>"
+      "</p>" +
+      (site
+        ? '<p style="margin:0">Your schedule: <a href="' +
+          esc(site + "/t/" + code) +
+          '" style="color:#1a1a19">' +
+          esc(host + "/t/" + code) +
+          "</a></p>"
+        : '<p style="margin:0">Enter it on the team page.</p>') +
+      "</div>"
     : "";
 
   const html =
@@ -169,13 +172,9 @@ function wrap(
     "\n\n" +
     "This link expires in 4 hours and can only be used once." +
     (code
-      ? "\n\nIf the link does not work, see your schedule at " +
-        (site
-          ? site + "/t/" + code + ", or go to " + site + "/t and enter "
-          : "the team page with ") +
-        "your team code " +
+      ? "\n\nYour team code works any time, no sign-in needed: " +
         code +
-        "."
+        (site ? "\nYour schedule: " + host + "/t/" + code : "")
       : "");
 
   return { subject, html, text };

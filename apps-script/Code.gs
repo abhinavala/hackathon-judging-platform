@@ -22,7 +22,7 @@ var FROM_NAME   = 'SCU ACM';
 var REPLY_TO    = 'acm@scu.edu';
 // Bump on every change; ping reports it so the caller can confirm which
 // deployment is live.
-var RELAY_VERSION = 4;
+var RELAY_VERSION = 5;
 
 // ---------------------------------------------------------------- entry point
 function doPost(e) {
@@ -183,20 +183,21 @@ function render(template, link, data) {
 }
 
 function wrap(subject, bodyHtml, buttonLabel, link, code) {
-  // Where the code works: the team page needs no sign-in, so it still works
-  // when the link has expired or never arrived. Written out as visible URLs,
-  // because forwarded mail and some clients drop buttons.
+  // The code is the hero: it never expires, unlike the link above it. The
+  // address once, without the scheme (lib/auth/templates.ts is identical).
   var site = siteOf(link);
+  var host = site.replace(/^https?:\/\//, '');
   var codeBlock = code
-    ? '<p style="margin:24px 0 0;padding:12px 16px;background:#f4f4f2;border-radius:8px;' +
-      'font-size:14px;color:#3d3d3a">If the link does not work, see your schedule at ' +
+    ? '<div style="margin:24px 0 0;padding:12px 16px;background:#f4f4f2;border-radius:8px;' +
+      'font-size:14px;color:#3d3d3a">' +
+      '<p style="margin:0">Your team code works any time, no sign-in needed:</p>' +
+      '<p style="margin:4px 0;font-family:monospace;font-size:24px;font-weight:700;' +
+      'letter-spacing:2px;color:#1a1a19">' + esc(code) + '</p>' +
       (site
-        ? '<a href="' + esc(site + '/t/' + code) + '" style="color:#1a1a19">' +
-          esc(site + '/t/' + code) + '</a>, or go to <a href="' + esc(site + '/t') +
-          '" style="color:#1a1a19">' + esc(site + '/t') + '</a> and enter '
-        : 'the team page with ') +
-      'your team code <strong style="font-family:monospace;font-size:16px">' +
-      esc(code) + '</strong>.</p>'
+        ? '<p style="margin:0">Your schedule: <a href="' + esc(site + '/t/' + code) +
+          '" style="color:#1a1a19">' + esc(host + '/t/' + code) + '</a></p>'
+        : '<p style="margin:0">Enter it on the team page.</p>') +
+      '</div>'
     : '';
 
   var html =
@@ -221,9 +222,8 @@ function wrap(subject, bodyHtml, buttonLabel, link, code) {
     link + '\n\n' +
     'This link expires in 4 hours and can only be used once.' +
     (code
-      ? '\n\nIf the link does not work, see your schedule at ' +
-        (site ? site + '/t/' + code + ', or go to ' + site + '/t and enter ' : 'the team page with ') +
-        'your team code ' + code + '.'
+      ? '\n\nYour team code works any time, no sign-in needed: ' + code +
+        (site ? '\nYour schedule: ' + host + '/t/' + code : '')
       : '');
 
   return { subject: subject, html: html, text: text };
