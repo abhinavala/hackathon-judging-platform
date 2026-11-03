@@ -72,6 +72,13 @@ export function appsScriptSecret(): string {
 // Dry runs only: deliver every sign-in link to one of these inboxes
 // (comma-separated) instead of its recipient. lib/auth/redirect.ts refuses it
 // on production; unset everywhere else.
+// Preview deployments only: the test inboxes they may email (comma-separated;
+// name+alias@domain counts as name@domain). Unset on a preview means it
+// emails nobody. Ignored outside previews (lib/auth/allowlist.ts).
+export function linkAllowlist(): string | undefined {
+  return process.env.AUTH_LINK_ALLOWLIST;
+}
+
 export function linkRedirectInboxes(): string | undefined {
   return process.env.AUTH_LINK_REDIRECT_TO;
 }

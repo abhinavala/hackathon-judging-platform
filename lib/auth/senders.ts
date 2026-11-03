@@ -2,6 +2,7 @@ import "server-only";
 import { SUPABASE_URL } from "@/lib/env";
 import { callRelay, type LinkMessage } from "@/lib/auth/relay";
 import { createSmtpTransport, sendSmtp, smtpConfigFrom } from "@/lib/auth/smtp";
+import { parseAllowlist, restrictTo } from "@/lib/auth/allowlist";
 import {
   parseInboxes,
   redirectMessage,
@@ -11,6 +12,7 @@ import {
   appsScriptSecret,
   appsScriptUrl,
   isProduction,
+  linkAllowlist,
   linkRedirectInboxes,
   linkSenderName,
   mailpitUrl,
@@ -60,12 +62,18 @@ export async function sendAll(
 }
 
 export function getLinkSender(): LinkSender {
-  const sender = {
+  const chosen = {
     console: consoleSender,
     mailpit: mailpitSender,
     smtp: smtpSender,
     appsScript: appsScriptSender,
   }[linkSenderName()];
+  // A preview deployment emails only the allowlisted test inboxes, and
+  // refuses (loudly) everyone else; with no allowlist, everyone.
+  const sender =
+    process.env.VERCEL_ENV === "preview"
+      ? (restrictTo(chosen, parseAllowlist(linkAllowlist())) as typeof chosen)
+      : chosen;
   const inboxes = parseInboxes(linkRedirectInboxes());
   if (inboxes.length === 0) return sender;
   // Dry run: refuse on production (by project ref and by deployment), then
