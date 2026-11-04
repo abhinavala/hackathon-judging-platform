@@ -25,9 +25,17 @@ flips it live, and participants only ever read the published one.
 
 Email is the most likely thing to misbehave, which is why the join code exists.
 
+**Verified 3 November 2026 (the Inbox gate):** every test email sent from
+production, sign-in links, check-in receipts and teammate invitations from
+`SCU ACM <aala@scu.edu>` to a Gmail account, was in the Inbox. A Gmail
+search found none in Spam, Promotions or Updates. An invitation's link
+signed the teammate in. Mail sent to two scu.edu inboxes (and two Gmail
+aliases) and left unopened for 30 minutes was not opened by any scanner.
+
 | Symptom | Likely cause | What to do |
 |---|---|---|
-| Testing on a **preview** deployment (`…-abhinavtala-7547s-projects.vercel.app`): an email never arrives, or "We couldn't send" | Previews send real email, but **only to the test inboxes in `AUTH_LINK_ALLOWLIST`** (and their `+aliases`): `abhinav.t.ala@gmail.com`, `abhatti@scu.edu`. Any other address is refused, and the refusal is recorded (the dashboard's "Check-in emails not sent" shows "Preview deployments only email the test inboxes…"). A preview with no allowlist refuses everything. Production has no allowlist and emails everyone | Test check-ins on a preview with `abhinav.t.ala+anything@gmail.com` addresses. Seeded and real roster addresses are refused there by design |
+| Testing on a **preview** deployment (`…-abhinavtala-7547s-projects.vercel.app`): an email never arrives, or "We couldn't send" | Previews send real email, but **only to the addresses in `AUTH_LINK_ALLOWLIST`** (and their `+aliases`): `abhinav.t.ala@gmail.com`, `abhatti@scu.edu`, `aala@scu.edu`. Any other address is refused, and the refusal is recorded (the dashboard's "Check-in emails not sent" shows "Preview deployments only email the test inboxes…"). A preview with no allowlist refuses everything. Production has no allowlist and emails everyone | Test check-ins on a preview with `abhinav.t.ala+anything@gmail.com` addresses. Seeded and real roster addresses are refused there by design |
+| **Every** email fails on production, with "AUTH_LINK_REDIRECT_TO is set" in the reason | `AUTH_LINK_REDIRECT_TO` (a dry-run setting) exists on Production. The code refuses to redirect there rather than send everyone's mail to one inbox, so nothing goes out | Delete it from Vercel's Production environment and redeploy. Meanwhile, join codes. `vercel env ls production` should never list it |
 | Nobody receives anything | `AUTH_LINK_SENDER` not `smtp`, or the App Password was revoked or changed | Check the Vercel env vars; `npm run mail:dry-run -- --ping` logs in without sending. Meanwhile, join codes |
 | Organizer dashboard lists "Check-in emails not sent" | Those addresses got nothing at check-in (the emails go out after the captain is answered) | Read the team's join code out, or the captain fixes the address and resends on `/team/members`, which clears the entry |
 | A team stuck at "sending" on the dashboard | The background send was cut short | Same: join code, and the captain can resend |
