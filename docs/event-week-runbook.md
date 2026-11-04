@@ -127,6 +127,16 @@ browser:
       that the board shows its seats empty.
 - [ ] Discard an unwanted late-change draft.
 
+## Email settings: check once Friday, once Saturday morning
+
+- [ ] `vercel env ls production | grep AUTH_LINK_REDIRECT_TO` prints
+      **nothing**. That variable is for dry runs on Preview; on Production
+      the code refuses it and every email fails.
+- [ ] `vercel env ls production | grep AUTH_LINK_SENDER` shows it set
+      (to `smtp`), and `npm run mail:dry-run -- --ping` logs in.
+- [ ] Production's last deploy happened after any email setting changed
+      (settings apply only to new deploys).
+
 ## Keep the Supabase project awake
 
 Free-tier projects **pause after about a week without activity**, and a

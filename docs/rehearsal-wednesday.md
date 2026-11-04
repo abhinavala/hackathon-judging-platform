@@ -28,15 +28,30 @@ On Preview, ready before you sit down:
   real form's would be. Your hand check-ins in Part 2 make it ~60.
 - Nothing generated, nothing published, no announcements.
 - `aala@scu.edu` is an organizer.
+- **Two judges with real, reachable addresses, seated at stations**: a
+  prerequisite, not a footnote. Most of the roster will be placeholders
+  until the sponsors confirm, and the judge view (`/judge`) has never been
+  used by a real signed-in judge. Unless two real judges have agreed to take
+  part, they are `abhinav.t.ala+judge1@gmail.com` and
+  `abhinav.t.ala+judge2@gmail.com`, each on a station that has teams.
+  Named here before you start: Judge 1 ____________ (Station __),
+  Judge 2 ____________ (Station __).
 - **The rehearsal link**: a preview of `main`. Use only that link today;
   bookmark it. (Not the production address: production stays clean for
   Saturday.)
+- **Production can't be redirecting email.** Run
+  `vercel env ls production | grep AUTH_LINK_REDIRECT_TO` and expect no
+  output. If that variable exists on Production, every email the site sends
+  fails (the code refuses to redirect on production), so it must never be
+  there.
 
-**Email on Preview:** previews email only `abhinav.t.ala@gmail.com`,
-`abhatti@scu.edu` and their `+anything` aliases. Everyone else, including
-the real judges' addresses, is refused, and the refusal is recorded. So use
-`abhinav.t.ala+something@gmail.com` for every address you type today, and
-watch **abhinav.t.ala@gmail.com** for mail.
+**Email on Preview:** previews email only the addresses on
+`AUTH_LINK_ALLOWLIST`: `abhinav.t.ala@gmail.com`, `abhatti@scu.edu`,
+`aala@scu.edu`, and their `+anything` aliases. Everyone else, including
+the real judges' and participants' addresses, is refused, and the refusal is
+recorded. So use `abhinav.t.ala+something@gmail.com` for every address you
+type today, and watch **abhinav.t.ala@gmail.com** for mail. A real judge
+taking part needs their address added to that list first.
 
 Have: a laptop, your phone, and the Gmail inbox open on the laptop.
 
@@ -99,7 +114,7 @@ starting. Start a stopwatch at 4.1.
 | 4.6 | Phone: the first team's page | Its first presentation large: day, station, **location**, time; both presentations listed | | |
 | 4.7 | **Printable schedule** (from the published version's page). Print to PDF | Page 1: every team A to Z with both times and stations (27). Page 2: the grid (28). Station locations and the help line on page 1 | Page 1 runs to a second sheet past ~68 teams: that's fine | |
 | 4.8 | Open `/board/<event>` on the laptop, full screen | "First up" and each station's team and location (29) | | |
-| 4.9 | Borrow a judge for a minute: on **Judges**, note one judge's real email, change it to `abhinav.t.ala+judge@gmail.com`, save. On the phone, `/login` with that alias, sign in from the email, open `/judge` | Their station, its teams in time order, the next one marked (34) | Then **put the real email back** on Judges |
+| 4.9 | On the phone, `/login` as **Judge 1** (from Part 0), sign in from the email, open `/judge`. Then the same for Judge 2 | Each sees their own station, its teams in time order, the next one marked (34), and no other station's teams | Nothing on the page: the judge isn't seated (10), or nothing is published (09) | |
 
 **Stop the stopwatch.** Write down the total. Compare it with the gap
 between Devpost closing and the judging start.
