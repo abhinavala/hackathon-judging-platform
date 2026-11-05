@@ -2275,6 +2275,25 @@ async function run() {
       "scoring: a judge saves their own team's score on the 4-criterion rubric; another station is refused; a participant can't reach it",
       `${ok.status} ${refused.status} ${asParticipant.status} ${rubric.length}`,
     );
+    // The organizer's completion view counts it, and lists the team as
+    // still waiting on its other judges.
+    {
+      const { data: t } = await db
+        .from("assignments")
+        .select("teams(name)")
+        .eq("id", mine.id)
+        .single();
+      const view = visible((await get("/organizer/scoring", org.cookie)).html);
+      const row = view.slice(view.indexOf("Teams missing scores"));
+      check(
+        /\b1 of \d+ scores in/.test(view) &&
+          row.includes(t.teams.name) &&
+          view.includes("Judges with teams left") &&
+          (await get("/organizer/scoring", judgeUser.cookie)).status === 404,
+        "scoring: the organizer's completion view counts the new score and lists what's still missing; judges can't open it",
+        view.slice(0, 200),
+      );
+    }
     await db.from("scores").delete().eq("assignment_id", mine.id);
   }
 
