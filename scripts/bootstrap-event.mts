@@ -141,6 +141,19 @@ async function main() {
         ? `an event with slug "${event.slug}" was created meanwhile. Nothing changed.`
         : `insert failed: ${error.message}`,
     );
+  // The judging rubric (0014). Editable afterwards with one SQL statement.
+  const { data: created } = await db
+    .from("events")
+    .select("id")
+    .eq("slug", event.slug)
+    .single();
+  const { error: rubricError } = await db.rpc("seed_default_rubric", {
+    p_event: created!.id,
+  });
+  if (rubricError)
+    fail(
+      `the event was created, but its rubric wasn't: ${rubricError.message}`,
+    );
   console.log(`Created the event:\n${summary}`);
   console.log(
     "\nNext, on the organizer screens: Tracks, Stations (with locations), Judges, then Import teams.",

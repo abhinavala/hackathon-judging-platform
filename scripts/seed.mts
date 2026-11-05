@@ -805,6 +805,13 @@ async function main() {
     );
   }
 
+  // The judging rubric (0014): the event's four criteria, from the same
+  // function the migration and the bootstrap script use.
+  {
+    const { error } = await db.rpc("seed_default_rubric", { p_event: eventId });
+    if (error) throw new Error(`rubric: ${error.message}`);
+  }
+
   // No seeded announcement: an event starts with none, and a leftover
   // "find your station" banner contradicted the not-yet-published state.
 
