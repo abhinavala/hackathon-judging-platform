@@ -2214,6 +2214,70 @@ async function run() {
     );
   }
 
+  // Phase 5: score entry. A judge saves their own published team's score;
+  // another station's team is refused; a participant can't reach it.
+  {
+    const { data: live } = await db
+      .from("schedules")
+      .select("id, event_id")
+      .eq("status", "published")
+      .single();
+    const { data: priyaJudge } = await db
+      .from("judges")
+      .select("id")
+      .eq("email", "priya.raman@aws.example")
+      .single();
+    const { data: seat } = await db
+      .from("panel_judges")
+      .select("panel_id")
+      .eq("judge_id", priyaJudge.id)
+      .single();
+    const { data: rows } = await db
+      .from("assignments")
+      .select("id, panel_id")
+      .eq("schedule_id", live.id)
+      .neq("status", "cancelled");
+    const mine = rows.find((x) => x.panel_id === seat.panel_id);
+    const theirs = rows.find((x) => x.panel_id !== seat.panel_id);
+    const { data: rubric } = await db
+      .from("rubric_criteria")
+      .select("id")
+      .eq("event_id", live.event_id);
+    const values = Object.fromEntries(
+      rubric.map((c, i) => [c.id, (i % 5) + 1]),
+    );
+    const save = (id, cookie) =>
+      fetch(`${BASE}/judge/score/${id}/save`, {
+        method: "POST",
+        headers: { "content-type": "application/json", cookie },
+        body: JSON.stringify({ values, notes: "admin check" }),
+        redirect: "manual",
+      });
+    const ok = await save(mine.id, judgeUser.cookie);
+    const { data: stored } = await db
+      .from("scores")
+      .select("notes, score_items(value)")
+      .eq("assignment_id", mine.id)
+      .eq("judge_id", priyaJudge.id)
+      .single();
+    const refused = await save(theirs.id, judgeUser.cookie);
+    const asParticipant = await save(mine.id, participant.cookie);
+    const page = await get(`/judge/score/${mine.id}`, judgeUser.cookie);
+    check(
+      ok.status === 200 &&
+        stored?.notes === "admin check" &&
+        stored.score_items.length === rubric.length &&
+        rubric.length === 4 &&
+        refused.status === 403 &&
+        asParticipant.status === 404 &&
+        page.status === 200 &&
+        visible(page.html).includes("Technical execution"),
+      "scoring: a judge saves their own team's score on the 4-criterion rubric; another station is refused; a participant can't reach it",
+      `${ok.status} ${refused.status} ${asParticipant.status} ${rubric.length}`,
+    );
+    await db.from("scores").delete().eq("assignment_id", mine.id);
+  }
+
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 }
 

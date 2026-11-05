@@ -88,13 +88,36 @@ export default async function JudgingPage() {
 
   const { data: rows } = await db
     .from("assignments")
-    .select("panel_id, status, teams(name), slots(starts_at, ends_at)")
+    .select("id, panel_id, status, teams(name), slots(starts_at, ends_at)")
     .eq("schedule_id", published.id)
     .in(
       "panel_id",
       seats.map((s) => s.panel_id),
     )
     .neq("status", "cancelled");
+
+  // How far this judge has scored each team (Phase 5): every criterion,
+  // some, or none.
+  const [{ data: myScores }, { count: criteriaCount }] = await Promise.all([
+    db
+      .from("scores")
+      .select("assignment_id, score_items(criterion_id)")
+      .eq("judge_id", judge.id),
+    db
+      .from("rubric_criteria")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", event.id),
+  ]);
+  const progress = new Map(
+    (myScores ?? []).map((s) => [
+      s.assignment_id,
+      s.score_items.length >= (criteriaCount ?? 0) && s.score_items.length > 0
+        ? ("complete" as const)
+        : s.score_items.length > 0
+          ? ("partial" as const)
+          : null,
+    ]),
+  );
 
   const stations: JudgeStation[] = seats
     .sort((a, b) => (a.panels?.sort_order ?? 0) - (b.panels?.sort_order ?? 0))
@@ -107,6 +130,8 @@ export default async function JudgingPage() {
           team: r.teams!.name,
           startsAt: r.slots!.starts_at,
           endsAt: r.slots!.ends_at,
+          assignmentId: r.id,
+          scored: progress.get(r.id) ?? null,
         })),
     }));
 
