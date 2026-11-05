@@ -2294,6 +2294,44 @@ async function run() {
         view.slice(0, 200),
       );
     }
+    // Deliberation ranks it, the CSV carries it, and the lock stops judges.
+    {
+      const { data: t } = await db
+        .from("assignments")
+        .select("teams(name)")
+        .eq("id", mine.id)
+        .single();
+      const delib = visible(
+        (await get("/organizer/scoring/deliberation", org.cookie)).html,
+      );
+      const csvRes = await get("/organizer/scoring/export", org.cookie);
+      const csvRows = csvRes.html
+        .trim()
+        .split("\n")
+        .filter((l) => l.includes(t.teams.name));
+      r = await submit("/organizer/scoring", org.cookie, "Lock scoring", {});
+      const lockedSave = await save(mine.id, judgeUser.cookie);
+      const lockedPage = visible(
+        (await get(`/judge/score/${mine.id}`, judgeUser.cookie)).html,
+      );
+      r = await submit("/organizer/scoring", org.cookie, "Unlock scoring", {});
+      const reopened = await save(mine.id, judgeUser.cookie);
+      check(
+        delib.includes(t.teams.name) &&
+          delib.includes("Ties are decided by deliberation") &&
+          csvRes.status === 200 &&
+          csvRows.length === 4 &&
+          lockedSave.status === 403 &&
+          lockedPage.includes("Scoring is closed") &&
+          reopened.status === 200 &&
+          (await get("/organizer/scoring/deliberation", judgeUser.cookie))
+            .status === 404 &&
+          (await get("/organizer/scoring/export", judgeUser.cookie)).status ===
+            404,
+        "scoring: deliberation ranks the team, the CSV has its 4 rows, the lock refuses judges and unlocking reopens; judges can't see either",
+        `${csvRows.length} ${lockedSave.status} ${reopened.status}`,
+      );
+    }
     await db.from("scores").delete().eq("assignment_id", mine.id);
   }
 

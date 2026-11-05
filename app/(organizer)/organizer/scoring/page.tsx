@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { adminDb, currentEvent } from "@/lib/admin/data";
 import { completion } from "@/lib/admin/completion";
-import { Section, table } from "../_ui/ui";
+import { loadScoring } from "@/lib/admin/scoring";
+import { Flash, Section, button, table } from "../_ui/ui";
+import { lockScoring, unlockScoring } from "./actions";
 
 // Reads the organizer's session; blocks on the server rather than
 // prerendering (as the guard layout does).
@@ -8,18 +11,15 @@ export const instant = false;
 
 // Who hasn't scored what (docs/phase-5-spec.md, item 3). The default view is
 // the problem list: teams and judges with scores missing, most missing first.
-export default async function ScoringPage() {
+export default async function ScoringPage({
+  searchParams,
+}: PageProps<"/organizer/scoring">) {
+  const params = await searchParams;
   const db = await adminDb();
   const event = await currentEvent(db);
   if (!event) return <p>No event exists yet.</p>;
-
-  const { data: published } = await db
-    .from("schedules")
-    .select("id, version")
-    .eq("event_id", event.id)
-    .eq("status", "published")
-    .eq("round", 1)
-    .maybeSingle();
+  const data = await loadScoring(db, event.id);
+  const published = data.published;
   if (!published)
     return (
       <main>
@@ -28,49 +28,17 @@ export default async function ScoringPage() {
       </main>
     );
 
-  const [{ data: assignments }, { data: seats }, { data: judges }, rubric] =
-    await Promise.all([
-      db
-        .from("assignments")
-        .select("id, team_id, panel_id, teams(name)")
-        .eq("schedule_id", published.id)
-        .neq("status", "cancelled"),
-      db.from("panel_judges").select("panel_id, judge_id"),
-      db.from("judges").select("id, full_name").eq("event_id", event.id),
-      db
-        .from("rubric_criteria")
-        .select("id", { count: "exact", head: true })
-        .eq("event_id", event.id),
-    ]);
-  const ids = (assignments ?? []).map((a) => a.id);
-  const { data: scores } = ids.length
-    ? await db
-        .from("scores")
-        .select("assignment_id, judge_id, score_items(id)")
-        .in("assignment_id", ids)
-    : { data: [] };
-
   const { teams, judges: byJudge } = completion({
-    assignments: (assignments ?? []).map((a) => ({
-      id: a.id,
-      teamId: a.team_id,
-      stationId: a.panel_id,
+    assignments: data.assignments,
+    teams: data.teams,
+    seats: data.seats,
+    judges: data.judges,
+    scores: data.scores.map((s) => ({
+      assignmentId: s.assignmentId,
+      judgeId: s.judgeId,
+      items: s.items.length,
     })),
-    teams: (assignments ?? []).map((a) => ({
-      id: a.team_id,
-      name: a.teams?.name ?? "?",
-    })),
-    seats: (seats ?? []).map((s) => ({
-      stationId: s.panel_id,
-      judgeId: s.judge_id,
-    })),
-    judges: (judges ?? []).map((j) => ({ id: j.id, name: j.full_name })),
-    scores: (scores ?? []).map((s) => ({
-      assignmentId: s.assignment_id,
-      judgeId: s.judge_id,
-      items: s.score_items.length,
-    })),
-    criteria: rubric.count ?? 0,
+    criteria: data.criteria.length,
   });
   const done = teams.reduce((n, t) => n + t.done, 0);
   const expected = teams.reduce((n, t) => n + t.expected, 0);
@@ -82,8 +50,31 @@ export default async function ScoringPage() {
       <h1 className="mb-1 text-xl font-semibold">Scoring</h1>
       <p className="mb-4 text-sm">
         Published v{published.version}. A score counts once all{" "}
-        {rubric.count ?? 0} criteria are filled in.
+        {data.criteria.length} criteria are filled in.{" "}
+        <Link href="/organizer/scoring/deliberation" className="underline">
+          Deliberation
+        </Link>{" "}
+        ·{" "}
+        <a href="/organizer/scoring/export" className="underline">
+          Download every score (CSV)
+        </a>
       </p>
+      <Flash params={params} />
+      <form
+        action={data.lockedAt ? unlockScoring : lockScoring}
+        className={`mb-6 rounded border-2 p-3 ${data.lockedAt ? "border-gray-500" : "border-amber-600"}`}
+      >
+        <p className="mb-2 font-semibold">
+          {data.lockedAt
+            ? "Scoring is locked: judges can see their scores but not change them."
+            : "Scoring is open: judges can enter and change scores."}
+        </p>
+        <button className={button}>
+          {data.lockedAt
+            ? "Unlock scoring"
+            : "Lock scoring (before deliberating)"}
+        </button>
+      </form>
       <p className="mb-6 text-2xl font-bold">
         {done} of {expected} scores in
         {missingTeams.length === 0 && expected > 0
