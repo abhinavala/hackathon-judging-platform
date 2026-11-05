@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PublishButton } from "./publish-button";
 import { notFound } from "next/navigation";
 import {
   adminDb,
@@ -192,7 +193,7 @@ export default async function SchedulePage({
                     </p>
                   ) : (
                     <label className="mt-1 flex items-center gap-2 font-medium">
-                      <input type="checkbox" name={`ack:${w.id}`} required />
+                      <input type="checkbox" name={`ack:${w.id}`} />
                       I&apos;ve reviewed this. Publish anyway.
                     </label>
                   )}
@@ -200,9 +201,11 @@ export default async function SchedulePage({
               ))}
             </ul>
           )}
-          <button className={button} disabled={review.invalid.length > 0}>
-            Publish v{schedule.version}
-          </button>
+          <PublishButton
+            version={schedule.version}
+            className={button}
+            blocked={review.invalid.length > 0}
+          />
         </form>
       ) : (
         <p className="mb-6 text-sm">

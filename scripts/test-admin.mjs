@@ -213,6 +213,29 @@ async function run() {
     anon.status === 307 && anon.location?.endsWith("/login"),
     "anonymous visitors are sent to /login",
   );
+  // You can click your way to your screens: signing in lands on /me, which
+  // links each role to its pages. /admin, the address people guess, goes to
+  // /organizer whether or not you're signed in.
+  {
+    const meOrg = (await get("/me", org.cookie)).html;
+    const meJudge = (await get("/me", judgeUser.cookie)).html;
+    const meTeam = (await get("/me", participant.cookie)).html;
+    const adminAnon = await get("/admin");
+    const adminOrg = await get("/admin", org.cookie);
+    check(
+      meOrg.includes('href="/organizer"') &&
+        meJudge.includes('href="/judge"') &&
+        !meJudge.includes('href="/organizer"') &&
+        meTeam.includes('href="/team"') &&
+        !meTeam.includes('href="/organizer"') &&
+        adminAnon.status === 307 &&
+        adminAnon.location === "/organizer" &&
+        adminOrg.status === 307 &&
+        adminOrg.location === "/organizer",
+      "navigation: /me links each role to its screens; /admin goes to /organizer, signed in or not",
+      `${adminAnon.status} ${adminAnon.location}`,
+    );
+  }
 
   // 2. Live pre-flight on the judges page.
   let judges = text((await get("/organizer/judges", org.cookie)).html);
@@ -1462,6 +1485,11 @@ async function run() {
   // Warnings identical to the published version's are already accepted and
   // shown without a tick box; changed or new ones still need one.
   const dropHtml = (await get(dropPath, org.cookie)).html;
+  check(
+    /name="ack:[\w-]+"/.test(dropHtml) &&
+      !/<input[^>]*name="ack:[^"]*"[^>]*required/.test(dropHtml),
+    "publish: the warning ticks are not browser-required fields (Publish explains instead)",
+  );
   const dropAcks = [...dropHtml.matchAll(/name="(ack:[\w-]+)"/g)].map(
     (m) => m[1],
   );

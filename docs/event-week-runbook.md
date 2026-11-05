@@ -84,6 +84,14 @@ Nothing retries a failed email by itself. You are the retry.
       timing drift that builds up across a morning. The generate screen
       suggests this by default; don't clear the field. Those spare seats
       don't raise a warning; only more empty seats than that do.
+- [ ] **Publishing a generated schedule reseats every judge.** With
+      Generate's default, "Form judge pairings automatically", the published
+      version puts each judge at the station it chose, wherever they were
+      before. So **never brief judges on their station before publishing**,
+      and **never regenerate once judges are seated and told**: for a late or
+      missing team use Late team / drop on the published version, which
+      keeps everyone where they are. (If you must regenerate after briefing,
+      choose "Keep the stations' current judges".)
 - [ ] **Straight after publishing, post the announcement.** Not optional:
       there is no schedule email (by decision), so this is the message that
       the schedule is out. **Announcements**, level Info, exactly:
