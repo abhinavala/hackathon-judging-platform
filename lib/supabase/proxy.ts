@@ -26,6 +26,8 @@ const PUBLIC_PREFIXES = [
   // code-entry form) and the big-screen board.
   "/t",
   "/board",
+  // Only a redirect to /organizer (app/admin/route.ts), which gates itself.
+  "/admin",
 ];
 
 function isPublic(pathname: string) {
