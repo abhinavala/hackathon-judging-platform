@@ -153,6 +153,25 @@ export async function updateSession(request: NextRequest) {
     return redirect;
   }
 
+  // Someone already signed in who opens the site lands on /me (their
+  // station, their team, the organizer screens), not on the anonymous
+  // homepage with its sign-in link. Only a session the auth server just
+  // confirmed counts: anything else (none, rejected, unavailable) gets the
+  // homepage exactly as before.
+  if (
+    request.nextUrl.pathname === "/" &&
+    (request.method === "GET" || request.method === "HEAD") &&
+    status === "signed-in"
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/me";
+    url.search = "";
+    const toMe = NextResponse.redirect(url);
+    toMe.headers.set("cache-control", "private, no-store");
+    response.cookies.getAll().forEach((c) => toMe.cookies.set(c));
+    return toMe;
+  }
+
   // Role gate. This has to happen here rather than in the route-group
   // layouts: with Cache Components the response commits to 200 before a
   // layout's notFound() runs, turning a role mismatch into a "soft" 404.

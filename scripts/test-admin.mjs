@@ -235,6 +235,27 @@ async function run() {
       "navigation: /me links each role to its screens; /admin goes to /organizer, signed in or not",
       `${adminAnon.status} ${adminAnon.location}`,
     );
+    {
+      const primary = (html) =>
+        text(
+          /data-testid="primary-action"[^>]*>([^<]*)</.exec(html)?.[1] ?? "",
+        );
+      const nobody = await signIn("nobody16@scu.example", "participant");
+      const meNobody = text((await get("/me", nobody.cookie)).html);
+      const home = await get("/", judgeUser.cookie);
+      check(
+        primary(meJudge) === "Your judging station" &&
+          primary(meTeam) === "Your team" &&
+          primary(meOrg) === "Organizer screens" &&
+          meNobody.includes("not on a team or the judge list yet") &&
+          meNobody.includes("Look up a team by join code") &&
+          home.status === 307 &&
+          home.location?.endsWith("/me") &&
+          (await get("/")).status === 200,
+        "landing: signed in, / goes to /me, whose one button is the judge's station, the participant's team or the organizer screens; no role says so; anonymous / is unchanged",
+        `${primary(meJudge)} | ${primary(meTeam)} | ${primary(meOrg)} | ${home.status} ${home.location}`,
+      );
+    }
   }
 
   // 2. Live pre-flight on the judges page.

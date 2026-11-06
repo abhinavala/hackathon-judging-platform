@@ -120,6 +120,21 @@ try {
   const judge = await signIn("smoke-judge@example.test", "judge");
   const organizer = await signIn("smoke-organizer@example.test", "organizer");
   await expectStatus("/team/none", participant.cookie, 200);
+  // Signed in, the site's address goes to /me; anonymous visitors keep the
+  // homepage (checked above).
+  for (const who of [participant, judge, organizer]) {
+    const r = await fetch(`${base}/`, {
+      headers: { cookie: who.cookie },
+      redirect: "manual",
+    });
+    if (
+      r.status !== 307 ||
+      new URL(r.headers.get("location"), base).pathname !== "/me"
+    )
+      throw new Error(
+        `/ signed in: expected 307 -> /me, got ${r.status} ${r.headers.get("location")}`,
+      );
+  }
   // /team is the signed-in team page; without a team it says so (never blank).
   const teamPage = await fetch(`${base}/team`, {
     headers: { cookie: participant.cookie },
