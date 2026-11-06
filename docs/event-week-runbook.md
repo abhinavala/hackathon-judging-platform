@@ -122,6 +122,34 @@ Nothing retries a failed email by itself. You are the retry.
       highlighted. If a judge sees "not given a station yet", seat them on
       **Stations**.
 
+## Judges signing in Sunday morning
+
+There is **no bulk "email every judge a link" action**, on purpose: judges
+sign themselves in, like everyone else. A judge has no join code; the judge
+view and scoring both need a session.
+
+- [ ] **Before Sunday:** every judge is on **Judges** on production with the
+      **exact address they'll type** (the one they read email on, on their
+      phone). Signing in links the account to the judge row by that address;
+      a different address signs them in as nobody in particular.
+- [ ] **What judges are told** (briefing and the judge email), word for word:
+
+      > On your phone, go to **judging.scuacm.com/login** (or
+      > judging.scuacm.com and tap "Already have an account? Sign in").
+      > Enter the email address we have for you. Open the email from
+      > "SCU ACM" ("Sign in to the AWS x A10 Hack") and tap **Sign in**. Then tap **"Your judging station"**.
+      > Do this when you arrive, before 9:45; it stays signed in all day.
+
+- [ ] Ask them to sign in **on arrival (from 9:30)**, not at 9:58: sixteen
+      people waiting on email at the same minute is avoidable.
+- [ ] **A judge who gets no email:** check the spelling of their address on
+      **Judges** against what they typed; fix it there and have them try
+      again. Look in Promotions/Spam. As a last resort an organizer can
+      read them their teams and times from the printed schedule's grid.
+- [ ] **A judge who lands on "You're signed in" with no "Your judging
+      station" link:** their address isn't on **Judges** (or is spelled
+      differently). Add or fix it, then they reload `/me`.
+
 ## Rehearse late changes in the dry run
 
 These screens get used in a hurry at 10:15 when a team turns up late, so
