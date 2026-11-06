@@ -42,6 +42,15 @@ export default async function Home() {
         Lost, or no code? Find an organizer at{" "}
         <strong>{helpPlace(event?.helpLocation)}</strong>.
       </p>
+
+      {/* Quiet on purpose: participants need the code, not an account. This
+          is for judges, organizers, and anyone already signed up. */}
+      <p className="mt-6 text-sm">
+        Already have an account?{" "}
+        <Link href="/login" className="underline">
+          Sign in
+        </Link>
+      </p>
     </main>
   );
 }
