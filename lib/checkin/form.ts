@@ -7,9 +7,11 @@
 
 import { normalizeEmail } from "../auth/email.ts";
 
-/** Including the captain. */
+/** Including the captain. AWS's limit, also enforced in the database (0015). */
 export const MAX_TEAM_SIZE = 6;
 export const TEAMMATE_ROWS = MAX_TEAM_SIZE - 1;
+/** Why, in every message that refuses a seventh person. */
+export const TEAM_CAP_REASON = `Teams are capped at ${MAX_TEAM_SIZE} people (you plus ${TEAMMATE_ROWS}) by AWS Workshop Studio, which gives each team one access code.`;
 const MAX_GITHUB = 5;
 
 export type CheckInTrack = { id: string; name: string };
@@ -102,15 +104,17 @@ export function parseCheckIn(
       errors[`teammateName${i}`] = "That name is too long.";
   }
 
-  const devpost = one(f, "devpostUrl");
-  let devpostUrl: string | null = null;
-  if (devpost) {
-    const u = url(devpost);
-    if (!u || !/(^|\.)devpost\.com$/.test(u.hostname))
-      errors.devpostUrl =
-        "Paste your project's devpost.com link, or leave it blank.";
-    else devpostUrl = u.toString();
-  }
+  // A seventh person can't be typed into the page (it has five rows), but
+  // a hand-made request could send more: refuse it, and say why.
+  const extra = Object.keys(f).some((k) => {
+    const m = /^teammateEmail(\d+)$/.exec(k);
+    return m && Number(m[1]) > TEAMMATE_ROWS && one(f, k);
+  });
+  if (extra) errors.form = TEAM_CAP_REASON;
+
+  const devpost = parseDevpostUrl(one(f, "devpostUrl"));
+  if (!devpost.ok) errors.devpostUrl = devpost.error;
+  const devpostUrl = devpost.ok ? devpost.value : null;
 
   const githubRaw = one(f, "githubUrls");
   const githubUrls: string[] = [];
@@ -170,6 +174,21 @@ export function parseCheckIn(
       notes: notes || null,
     },
   };
+}
+
+/** A devpost.com link, or blank for none. Check-in and the team page share it. */
+export function parseDevpostUrl(
+  raw: string,
+): { ok: true; value: string | null } | { ok: false; error: string } {
+  const v = raw.trim();
+  if (!v) return { ok: true, value: null };
+  const u = url(v);
+  if (!u || !/(^|\.)devpost\.com$/.test(u.hostname))
+    return {
+      ok: false,
+      error: "Paste your project's devpost.com link, or leave it blank.",
+    };
+  return { ok: true, value: u.toString() };
 }
 
 function url(raw: string): URL | null {

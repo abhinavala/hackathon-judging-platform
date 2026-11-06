@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { CheckInTrack, FieldErrors, FormFields } from "@/lib/checkin/form";
-import { TEAMMATE_ROWS } from "@/lib/checkin/form";
+import { TEAM_CAP_REASON, TEAMMATE_ROWS } from "@/lib/checkin/form";
 
 const input = "w-full rounded border px-3 py-2 text-base";
 const label = "mb-1 block font-medium";
@@ -194,8 +194,9 @@ export function CheckInForm({
       <fieldset className="space-y-4">
         <legend className="mb-1 text-lg font-semibold">Teammates</legend>
         <p className="text-sm">
-          Up to {TEAMMATE_ROWS} besides you. Each gets an email inviting them to
-          join your team. Leave rows blank if your team is smaller.
+          Up to {TEAMMATE_ROWS} besides you: {TEAM_CAP_REASON} Each gets an
+          email inviting them to join your team. Leave rows blank if your team
+          is smaller.
         </p>
         {Array.from({ length: TEAMMATE_ROWS }, (_, i) => i + 1).map((n) => (
           <div key={n} className="grid gap-2 sm:grid-cols-2">

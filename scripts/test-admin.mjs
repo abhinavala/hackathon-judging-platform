@@ -1226,11 +1226,13 @@ async function run() {
     })
     .eq("id", ev.id);
 
-  const mine = await get("/team", participant.cookie);
+  const mine = visible((await get("/team", participant.cookie)).html);
   check(
-    mine.status === 307 && mine.location?.endsWith(`/t/${code}`),
-    "/team sends a signed-in participant to their team's view",
-    `${mine.status} ${mine.location}`,
+    mine.includes("Judging") &&
+      mine.includes("Live schedule and countdown") &&
+      mine.includes(code),
+    "/team is the signed-in team page: judging times, the live schedule link, the join code",
+    mine.slice(0, 200),
   );
 
   // 11. The board, and the announcements that drive its banner.
@@ -2055,9 +2057,24 @@ async function run() {
   );
   // And going around the app entirely: the same teammate's session, straight
   // at the database API.
+  // The team is full (six) by now, and 0015's cap would refuse the insert
+  // first; make room so this exercises RLS, then put the member back.
+  const { data: spare } = await db
+    .from("team_members")
+    .select("email, full_name")
+    .eq("team_id", owls.id)
+    .like("email", "extra%")
+    .limit(1)
+    .single();
+  await db
+    .from("team_members")
+    .delete()
+    .eq("team_id", owls.id)
+    .eq("email", spare.email);
   const { error: bypassAdd } = await sam.client
     .from("team_members")
     .insert({ team_id: owls.id, email: "smuggled@scu.example" });
+  await db.from("team_members").insert({ team_id: owls.id, ...spare });
   const { data: bypassEdit } = await sam.client
     .from("team_members")
     .update({ email: "hijacked@scu.example" })
@@ -2361,6 +2378,290 @@ async function run() {
       );
     }
     await db.from("scores").delete().eq("assignment_id", mine.id);
+  }
+
+  // 16. AWS's rules (0015): six per team, the code pool, the team page,
+  // Devpost by any member. Check-in is still open from section 14.
+  {
+    const seven = {
+      teamName: "Seven Up",
+      captainEmail: "seven1@scu.example",
+      teammateName1: "",
+      teammateEmail1: "seven2@scu.example",
+      teammateEmail2: "seven3@scu.example",
+      teammateEmail3: "seven4@scu.example",
+      teammateEmail4: "seven5@scu.example",
+      teammateEmail5: "seven6@scu.example",
+      teammateEmail6: "seven7@scu.example",
+    };
+    let res = await postCheckin(checkinForm(seven), true);
+    let body = await res.json();
+    const { data: sevenRows } = await db
+      .from("teams")
+      .select("id")
+      .eq("name", "Seven Up");
+    check(
+      res.status === 422 &&
+        /capped at 6 people .*by AWS Workshop Studio/.test(body.errors?.form) &&
+        sevenRows.length === 0,
+      "cap: a seventh person at check-in is refused with AWS's reason, and nothing is saved",
+      JSON.stringify(body.errors),
+    );
+    const form16 = visible((await get("/checkin")).html);
+    check(
+      form16.includes(
+        "Teams are capped at 6 people (you plus 5) by AWS Workshop Studio",
+      ),
+      "cap: the check-in form says why teams stop at six",
+    );
+
+    // Before any codes exist: check-in still works, and the dashboard says what's missing.
+    res = await postCheckin(
+      checkinForm({
+        teamName: "Pool Empty",
+        captainEmail: "pe1@scu.example",
+        teammateName1: "",
+        teammateEmail1: "pe2@scu.example",
+        teammateEmail2: "",
+        devpostUrl: "",
+      }),
+      true,
+    );
+    let overview = visible((await get("/organizer", org.cookie)).html);
+    const missingAt = overview.indexOf("Teams missing AWS codes");
+    check(
+      res.status === 200 &&
+        overview.includes("No workshop codes imported yet") &&
+        missingAt > 0 &&
+        overview.slice(missingAt).includes("Pool Empty") &&
+        overview.slice(missingAt).includes("none imported yet"),
+      "codes: with the pool empty, check-in succeeds and the dashboard lists the team and why",
+      `${res.status} ${overview.slice(Math.max(0, missingAt), missingAt + 200)}`,
+    );
+    check(
+      overview.includes("Teams without a Devpost link") &&
+        visible(
+          (await get("/organizer", org.cookie)).html.slice(
+            (await get("/organizer", org.cookie)).html.indexOf("no-devpost"),
+          ),
+        ).includes("Pool Empty"),
+      "devpost: the dashboard lists the teams without a link, to chase",
+    );
+
+    // Import: a preview first, nothing written; then the import.
+    const { data: active } = await db
+      .from("teams")
+      .select("id, join_code, team_members(id, email, is_captain)")
+      .not("checked_in_at", "is", null)
+      .is("withdrawn_at", null);
+    const people = active.reduce((n, t) => n + t.team_members.length, 0);
+    const nW = active.length + 3;
+    const wsCsv = (joined) =>
+      "Team name,Team code,Participant count,Participant IDs,State,Deployment duration,AWS account ID,Join event URL,Last joined,Last account login,Last updated\n" +
+      Array.from({ length: nW }, (_, i) => {
+        const c = `ws${String(i).padStart(4, "0")}x`;
+        return `team-${i},${c},${joined},"pid-${i}-a;pid-${i}-b",Ready,2h,${100000000000 + i},https://catalog.us-east-1.prod.workshops.aws/join?access-code=${c},,,2026-11-05`;
+      }).join("\n");
+    const kiroCsv =
+      "bonusCode,bonusName,bonusAmount,validFrom,validUntil,expirationDate,redemptionUrl\n" +
+      Array.from(
+        { length: people + 10 },
+        (_, i) =>
+          `KIRO${String(i).padStart(5, "0")},Hack,1000,2026-11-01,2026-12-31,2026-12-31,https://kiro.example/redeem/K${i}`,
+      ).join("\n");
+    const runCodes = async (csv, mode) => {
+      const fd = new FormData();
+      fd.set("csv", csv);
+      fd.set("mode", mode);
+      const r = await fetch(`${BASE}/organizer/codes/run`, {
+        method: "POST",
+        body: fd,
+        headers: { cookie: org.cookie },
+      });
+      return r.json();
+    };
+    const preview = await runCodes(wsCsv(0), "preview");
+    const { count: afterPreview } = await db
+      .from("access_codes")
+      .select("*", { count: "exact", head: true });
+    check(
+      preview.kind === "workshop" &&
+        preview.plan.added === nW &&
+        preview.columns
+          .find((c) => c.header === "Participant IDs")
+          ?.use.includes("NOT stored") &&
+        !JSON.stringify(preview).includes("pid-") &&
+        afterPreview === 0,
+      "codes: the preview shows each column's use and the counts, writes nothing, and never carries Participant IDs",
+      JSON.stringify(preview).slice(0, 300),
+    );
+    const kiroPreview = await runCodes(
+      kiroCsv.replace(
+        ",1000,2026-11-01,2026-12-31,2026-12-31,",
+        ",500,2026-11-01,2026-12-31,2020-01-01,",
+      ),
+      "preview",
+    );
+    check(
+      kiroPreview.kind === "kiro" &&
+        kiroPreview.warnings.some((w) =>
+          w.includes("bonusAmount isn't 1000 on line 2"),
+        ) &&
+        kiroPreview.warnings.some((w) => w.includes("already expired")),
+      "codes: the Kiro preview warns when bonusAmount isn't 1000 or a code has expired",
+      JSON.stringify(kiroPreview.warnings),
+    );
+    const w1 = await runCodes(wsCsv(0), "import");
+    const k1 = await runCodes(kiroCsv, "import");
+    const { data: pool } = await db
+      .from("access_codes")
+      .select("kind, code, team_id, member_id, details");
+    const wsOf = new Map(
+      pool
+        .filter((c) => c.kind === "workshop" && c.team_id)
+        .map((c) => [c.team_id, c.code]),
+    );
+    const kiroOf = new Map(
+      pool
+        .filter((c) => c.kind === "kiro" && c.member_id)
+        .map((c) => [c.member_id, c.code]),
+    );
+    check(
+      w1.done &&
+        k1.done &&
+        active.every((t) => wsOf.has(t.id) || t.team_members.length === 0) &&
+        active.every((t) => t.team_members.every((m) => kiroOf.has(m.id))) &&
+        !JSON.stringify(pool).includes("pid-"),
+      "codes: importing hands every waiting team its workshop code and every person a Kiro code",
+      `${w1.done ?? w1.error} | ${k1.done ?? k1.error}`,
+    );
+    const w2 = await runCodes(wsCsv(3), "import");
+    const { data: again } = await db
+      .from("access_codes")
+      .select("participant_count")
+      .eq("kind", "workshop");
+    check(
+      w2.done &&
+        again.length === nW &&
+        again.every((c) => c.participant_count === 3),
+      "codes: re-importing the workshop file updates the live columns and adds no second copy",
+      `${again.length} ${w2.done ?? w2.error}`,
+    );
+
+    // The team page: the team's workshop code, the person's own Kiro code.
+    // Any active team of two or more (ShelterLink was withdrawn in 12).
+    const shelter = active.find(
+      (t) =>
+        t.team_members.length >= 2 && t.team_members.some((m) => m.is_captain),
+    );
+    const emily = shelter.team_members.find((m) => m.is_captain);
+    const mateRow = shelter.team_members.find((m) => !m.is_captain);
+    const captain16 = await signIn(emily.email, "participant");
+    const mate = await signIn(mateRow.email, "participant");
+    const mineHtml = (await get("/team", captain16.cookie)).html;
+    const mateHtml = (await get("/team", mate.cookie)).html;
+    const mine16 = visible(mineHtml);
+    check(
+      mine16.includes(wsOf.get(shelter.id)) &&
+        mineHtml.includes(
+          `https://catalog.us-east-1.prod.workshops.aws/join?access-code=${wsOf.get(shelter.id)}`,
+        ) &&
+        mine16.includes("catalog.us-east-1.prod.workshops.aws/join") &&
+        mine16.includes("Join with your SCU email address (@scu.edu)") &&
+        mine16.includes(kiroOf.get(emily.id)) &&
+        mine16.includes("Expires December") &&
+        !mine16.includes(kiroOf.get(mateRow.id)) &&
+        !mine16.includes("team-") &&
+        !mine16.includes("1000000000"),
+      "team page: the workshop link and code, SCU-email warning, the person's own Kiro code; no teammate's code, no AWS team name or account",
+    );
+    check(
+      visible(mateHtml).includes(wsOf.get(shelter.id)) &&
+        visible(mateHtml).includes(kiroOf.get(mateRow.id)) &&
+        !visible(mateHtml).includes(kiroOf.get(emily.id)),
+      "team page: a teammate sees the same workshop code and only their own Kiro code",
+    );
+    const anonT =
+      (await get(`/t/${shelter.join_code}`)).html +
+      (await get(`/t/${shelter.join_code}/data`)).html;
+    check(
+      !anonT.includes(wsOf.get(shelter.id)) &&
+        !anonT.includes(kiroOf.get(emily.id)) &&
+        !anonT.includes("KIRO"),
+      "team page: /t/CODE and its data, without signing in, carry neither code",
+    );
+
+    // A late teammate gets their own Kiro code and the team's workshop code.
+    const { data: pe } = await db
+      .from("teams")
+      .select("id")
+      .eq("name", "Pool Empty")
+      .single();
+    const peCaptain = await signIn("pe1@scu.example", "participant");
+    r = await submit("/team/members", peCaptain.cookie, "Add and invite", {
+      name: "Late Comer",
+      email: "late16@scu.example",
+    });
+    const { data: late } = await db
+      .from("team_members")
+      .select("id")
+      .eq("email", "late16@scu.example")
+      .single();
+    const { data: lateCodes } = await db
+      .from("access_codes")
+      .select("kind, code")
+      .or(`member_id.eq.${late?.id},and(kind.eq.workshop,team_id.eq.${pe.id})`);
+    const lateUser = await signIn("late16@scu.example", "participant");
+    const latePage = visible((await get("/team", lateUser.cookie)).html);
+    check(
+      lateCodes?.length === 2 &&
+        lateCodes.every((c) => latePage.includes(c.code)),
+      "late teammate: added by the captain, they get a Kiro code and see the team's workshop code",
+      `${flash(r.url)} ${JSON.stringify(lateCodes)}`,
+    );
+    for (let i = 4; i <= 6; i++)
+      await submit("/team/members", peCaptain.cookie, "Add and invite", {
+        name: "",
+        email: `fill16-${i}@scu.example`,
+      });
+    tm = visible((await get("/team/members", peCaptain.cookie)).html);
+    const { count: peCount } = await db
+      .from("team_members")
+      .select("id", { count: "exact", head: true })
+      .eq("team_id", pe.id);
+    check(
+      peCount === 6 &&
+        tm.includes("Your team has 6, the most allowed") &&
+        tm.includes("by AWS Workshop Studio") &&
+        !tm.includes("Add and invite"),
+      "cap: at six the captain is told why there's no way to add a seventh",
+      `${peCount}`,
+    );
+    const { data: owls16 } = await db
+      .from("teams")
+      .select("id")
+      .eq("name", "Night Owls")
+      .single();
+
+    // Devpost: any member, after check-in.
+    r = await submit("/team", sam.cookie, 'name="devpostUrl"', {
+      devpostUrl: "devpost.com/software/owls-final",
+    });
+    const { data: owlsDev } = await db
+      .from("teams")
+      .select("devpost_url")
+      .eq("id", owls16.id)
+      .single();
+    const bad = await submit("/team", sam.cookie, 'name="devpostUrl"', {
+      devpostUrl: "https://github.com/owls/app",
+    });
+    check(
+      flash(r.url).startsWith("Saved.") &&
+        owlsDev.devpost_url === "https://devpost.com/software/owls-final" &&
+        flash(bad.url).includes("devpost.com link"),
+      "devpost: a non-captain teammate sets the link after check-in; a non-Devpost link is refused",
+      `${flash(r.url)} | ${flash(bad.url)}`,
+    );
   }
 
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");

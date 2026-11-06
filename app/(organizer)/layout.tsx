@@ -20,6 +20,7 @@ const NAV = [
   ["/organizer/event", "Event"],
   ["/organizer/tracks", "Tracks"],
   ["/organizer/import", "Import teams"],
+  ["/organizer/codes", "AWS codes"],
   ["/organizer/judges", "Judges"],
   ["/organizer/panels", "Stations"],
   ["/organizer/generate", "Generate"],

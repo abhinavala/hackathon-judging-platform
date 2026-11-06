@@ -746,5 +746,198 @@ begin
   delete from public.scores;
 end $$;
 
+-- ---- 0015: team cap, the code pool, Devpost by any member -------------------
+do $$
+declare
+  ok boolean; n int; m int; j jsonb;
+  ev    constant uuid := 'e0000000-0000-0000-0000-000000000001';
+  alpha constant uuid := 'a0000000-0000-0000-0000-000000000001';
+  bravo constant uuid := 'a0000000-0000-0000-0000-000000000002';
+  cap_a constant uuid := '11111111-1111-1111-1111-111111111111';
+  cap_b constant uuid := '22222222-2222-2222-2222-222222222222';
+  mate  constant uuid := '88888888-8888-8888-8888-888888888801';
+  org   constant uuid := '55555555-5555-5555-5555-555555555555';
+  ws_alpha text; kiro_cap text; kiro_mate text;
+begin
+  update public.teams set checked_in_at = now() where id in (alpha, bravo);
+  insert into auth.users (id, email) values (mate, 'mate.a@scu.edu');
+  insert into public.team_members (team_id, email) values (alpha, 'mate.a@scu.edu');
+
+  -- The pool arrives after check-in; topping it up fills the gaps.
+  perform become(org);
+  insert into public.access_codes (event_id, kind, code, join_url, aws_team_name, aws_account_id) values
+    (ev, 'workshop', 'WSONE1', 'https://catalog.us-east-1.prod.workshops.aws/join?access-code=WSONE1', 'team-001', '111122223333'),
+    (ev, 'workshop', 'WSTWO2', 'https://catalog.us-east-1.prod.workshops.aws/join?access-code=WSTWO2', 'team-002', '444455556666');
+  insert into public.access_codes (event_id, kind, code, redemption_url, amount)
+  select ev, 'kiro', 'KIRO-' || g, 'https://kiro.example/redeem/' || g, 1000
+    from generate_series(1, 12) g;
+  perform public.claim_missing_codes(ev);
+  reset role;
+  select count(*) into m from public.team_members where team_id in (alpha, bravo);
+  select count(*) into n from public.access_codes where kind = 'workshop' and team_id in (alpha, bravo);
+  select count(*) = m into ok from public.access_codes where kind = 'kiro' and member_id is not null;
+  perform test_assert(n = 2 and ok,
+    '0015: each checked-in team gets one workshop code and each member one Kiro code');
+  select code into ws_alpha from public.access_codes where kind = 'workshop' and team_id = alpha;
+  select ac.code into kiro_cap from public.access_codes ac
+    join public.team_members tm on tm.id = ac.member_id where tm.email = 'captain.a@scu.edu';
+  select ac.code into kiro_mate from public.access_codes ac
+    join public.team_members tm on tm.id = ac.member_id where tm.email = 'mate.a@scu.edu';
+
+  perform become(cap_a);
+  j := public.my_access_codes();
+  perform test_assert(j -> 'workshop' ->> 'code' = ws_alpha and j -> 'kiro' ->> 'code' = kiro_cap
+                      and j -> 'workshop' ->> 'join_url' like '%' || ws_alpha
+                      and j::text not like '%111122223333%' and j::text not like '%team-001%',
+    '0015: a member sees their team''s workshop code and their own Kiro code, and none of AWS''s fields');
+  select count(*) into n from public.access_codes;
+  perform test_assert(n = 0, '0015: a participant cannot read the pool directly');
+  reset role;
+
+  perform become(mate);
+  j := public.my_access_codes();
+  perform test_assert(j -> 'workshop' ->> 'code' = ws_alpha and j -> 'kiro' ->> 'code' = kiro_mate
+                      and kiro_mate <> kiro_cap,
+    '0015: a teammate sees the same workshop code but only their own Kiro code');
+  reset role;
+
+  perform become(cap_b);
+  j := public.my_access_codes();
+  perform test_assert(j -> 'workshop' ->> 'code' <> ws_alpha and j::text not like '%' || kiro_cap || '"%',
+    '0015: another team''s captain sees neither of Alpha''s codes');
+  reset role;
+
+  perform become_anon();
+  begin
+    select count(*) into n from public.access_codes;
+    ok := n = 0;
+  exception when others then ok := true;
+  end;
+  begin
+    j := public.my_access_codes();
+    ok := false;
+  exception when others then null;
+  end;
+  perform test_assert(ok, '0015: an anonymous request reaches neither kind of code');
+  j := public.team_view('ALFA-1234');
+  perform test_assert(j ->> 'found' = 'true' and j::text not like '%' || ws_alpha || '%'
+                      and j::text not like '%KIRO-%',
+    '0015: the join-code page (/t/CODE) carries no code of either kind');
+  reset role;
+
+  perform become(org);
+  begin
+    update public.access_codes set claimed_at = null where code = ws_alpha;
+    ok := false;
+  exception when others then ok := true;
+  end;
+  begin
+    update public.access_codes set member_id = (select id from public.team_members where email = 'mate.a@scu.edu')
+     where code = kiro_cap;
+    ok := false;
+  exception when others then ok := ok;
+  end;
+  begin
+    delete from public.access_codes where code = kiro_cap;
+    ok := false;
+  exception when others then ok := ok;
+  end;
+  perform test_assert(ok, '0015: a claimed code is never reassigned or deleted, even by an organizer');
+  reset role;
+
+  -- A teammate added later gets a Kiro code; the team keeps its one workshop code.
+  perform become(cap_a);
+  insert into public.team_members (team_id, email) values (alpha, 'late.a@scu.edu');
+  reset role;
+  select count(*) into n from public.access_codes ac
+    join public.team_members tm on tm.id = ac.member_id
+   where tm.email = 'late.a@scu.edu' and ac.kind = 'kiro';
+  select count(*) into m from public.access_codes where kind = 'workshop' and team_id = alpha;
+  perform test_assert(n = 1 and m = 1,
+    '0015: a teammate added later claims a Kiro code and shares the team''s workshop code');
+
+  -- Six is the cap: the captain fills the team, then a seventh is refused.
+  perform become(cap_a);
+  select count(*) into n from public.team_members where team_id = alpha;
+  for i in n + 1 .. 6 loop
+    insert into public.team_members (team_id, email) values (alpha, 'fill' || i || '@scu.edu');
+  end loop;
+  begin
+    insert into public.team_members (team_id, email) values (alpha, 'seventh@scu.edu');
+    ok := false;
+  exception when others then ok := sqlerrm like 'team_full%';
+  end;
+  reset role;
+  perform become(org);
+  begin
+    insert into public.team_members (team_id, email) values (alpha, 'seventh@scu.edu');
+    ok := false;
+  exception when others then ok := ok and sqlerrm like 'team_full%';
+  end;
+  reset role;
+  select count(*) into n from public.team_members where team_id = alpha;
+  perform test_assert(ok and n = 6,
+    '0015: a seventh member is refused, for the captain and an organizer alike');
+
+  select count(*) into m from public.teams;
+  j := public.check_in_team(jsonb_build_object(
+    'event_id', ev, 'name', 'Too Many', 'join_code', 'TOOB-1234',
+    'contact_email', 'c1@scu.edu', 'has_grad_student', false,
+    'all_freshmen', false, 'half_or_more_non_male', false,
+    'members', (select jsonb_agg(jsonb_build_object('email', 'c' || g || '@scu.edu', 'is_captain', g = 1))
+                  from generate_series(1, 7) g)));
+  select count(*) into n from public.teams;
+  perform test_assert(j ->> 'error' = 'team_too_big' and n = m,
+    '0015: check-in refuses a team of seven and saves nothing');
+
+  -- An empty pool never fails adding a person; they just have no code yet.
+  perform become(org);
+  delete from public.access_codes where kind = 'kiro' and claimed_at is null;
+  reset role;
+  perform become(cap_b);
+  insert into public.team_members (team_id, email) values (bravo, 'nocode.b@scu.edu');
+  reset role;
+  select count(*) into n from public.team_members where email = 'nocode.b@scu.edu';
+  select count(*) into m from public.access_codes ac
+    join public.team_members tm on tm.id = ac.member_id where tm.email = 'nocode.b@scu.edu';
+  perform test_assert(n = 1 and m = 0, '0015: with the pool empty, adding a person still succeeds');
+
+  -- Devpost: any member, and nothing else about the team.
+  perform become(mate);
+  perform public.set_team_devpost(alpha, 'https://devpost.com/software/alpha');
+  update public.teams set name = 'Renamed by a teammate' where id = alpha;
+  get diagnostics n = row_count;
+  reset role;
+  select count(*) into m from public.teams
+   where id = alpha and devpost_url = 'https://devpost.com/software/alpha' and name = 'Team Alpha';
+  perform test_assert(m = 1 and n = 0,
+    '0015: a non-captain member can set the Devpost link, and still cannot rename the team');
+  perform become(cap_b);
+  begin
+    perform public.set_team_devpost(alpha, 'https://devpost.com/software/hijack');
+    ok := false;
+  exception when others then ok := true;
+  end;
+  reset role;
+  perform become(mate);
+  begin
+    perform public.set_team_devpost(alpha, 'https://evil.example/devpost.com');
+    ok := false;
+  exception when others then ok := ok;
+  end;
+  reset role;
+  perform become_anon();
+  begin
+    perform public.set_team_devpost(alpha, 'https://devpost.com/software/anon');
+    ok := false;
+  exception when others then ok := ok;
+  end;
+  reset role;
+  select count(*) into m from public.teams
+   where id = alpha and devpost_url = 'https://devpost.com/software/alpha';
+  perform test_assert(ok and m = 1,
+    '0015: another team, an anonymous visitor, or a non-Devpost link can''t set it');
+end $$;
+
 \echo ''
 \echo '================= ALL PHASE 1 ACCEPTANCE TESTS PASSED ================='

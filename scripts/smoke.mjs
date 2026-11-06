@@ -120,17 +120,15 @@ try {
   const judge = await signIn("smoke-judge@example.test", "judge");
   const organizer = await signIn("smoke-organizer@example.test", "organizer");
   await expectStatus("/team/none", participant.cookie, 200);
-  // /team is a real 307: to the team's view, or to /team/none without a team.
-  const teamRedirect = await fetch(`${base}/team`, {
+  // /team is the signed-in team page; without a team it says so (never blank).
+  const teamPage = await fetch(`${base}/team`, {
     headers: { cookie: participant.cookie },
     redirect: "manual",
   });
-  if (
-    teamRedirect.status !== 307 ||
-    teamRedirect.headers.get("location") !== "/team/none"
-  ) {
+  const teamHtml = await teamPage.text();
+  if (teamPage.status !== 200 || !teamHtml.includes("not on a team yet")) {
     throw new Error(
-      `/team without a team: expected 307 -> /team/none, got ${teamRedirect.status} ${teamRedirect.headers.get("location")}`,
+      `/team without a team: expected 200 "not on a team yet", got ${teamPage.status}`,
     );
   }
   await expectStatus("/judge", participant.cookie, 404);

@@ -50,7 +50,8 @@ export default async function MePage() {
         )}
         {ctx.teamId && (
           <Link href="/team" className="font-semibold underline">
-            Your team&apos;s judging times
+            Your team page: judging times, AWS workshop code, Kiro credits,
+            Devpost
           </Link>
         )}
         {ctx.role !== "organizer" && !ctx.judgeId && !ctx.teamId && (

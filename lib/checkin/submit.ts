@@ -10,6 +10,7 @@ import { clockWithZone, dayLabel } from "@/lib/team/view";
 import { serviceClient } from "@/lib/supabase/service";
 import {
   parseCheckIn,
+  TEAM_CAP_REASON,
   TEAMMATE_ROWS,
   type CheckInTrack,
   type FieldErrors,
@@ -187,6 +188,8 @@ export async function submitCheckIn(
           ? ` (${emails.join(", ")} ${emails.length === 1 ? "is" : "are"} already on a checked-in team)`
           : ""
       }. Look for the confirmation email, or find an organizer at ${help}. Nothing was saved.`;
+    } else if (reply?.error === "team_too_big") {
+      errors.form = `${TEAM_CAP_REASON} Nothing was saved.`;
     } else if (reply?.error === "name_taken") {
       errors.teamName = `A team called "${c.teamName}" has already checked in. If that's your team, someone has already checked you in; otherwise choose another name.`;
     } else {

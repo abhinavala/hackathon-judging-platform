@@ -104,7 +104,7 @@ export default async function DeliberationPage({
                   </td>
                   <td>
                     <span className="font-semibold">{t?.name}</span>
-                    {t?.devpostUrl && (
+                    {t?.devpostUrl ? (
                       <>
                         {" "}
                         <a
@@ -116,6 +116,8 @@ export default async function DeliberationPage({
                           Devpost
                         </a>
                       </>
+                    ) : (
+                      <span className="text-xs"> · no Devpost link</span>
                     )}
                     {t && t.tracks.length > 0 && (
                       <div className="text-xs text-gray-600">
