@@ -103,14 +103,14 @@ isOneToOne: true
                   ]
                 },"events": {
                   Row: {
-                    "checkin_closes_at": string | null,"checkin_opens_at": string | null,"created_at": string,"help_location": string | null,"id": string,"judging_starts_at": string | null,"name": string,"slot_minutes": number,"slug": string,"timezone": string,"year": number
+                    "checkin_closes_at": string | null,"checkin_opens_at": string | null,"created_at": string,"help_location": string | null,"id": string,"judging_starts_at": string | null,"name": string,"scores_locked_at": string | null,"slot_minutes": number,"slug": string,"timezone": string,"year": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "checkin_closes_at"?: string | null,"checkin_opens_at"?: string | null,"created_at"?: string,"help_location"?: string | null,"id"?: string,"judging_starts_at"?: string | null,"name": string,"slot_minutes"?: number,"slug": string,"timezone"?: string,"year": number
+                    "checkin_closes_at"?: string | null,"checkin_opens_at"?: string | null,"created_at"?: string,"help_location"?: string | null,"id"?: string,"judging_starts_at"?: string | null,"name": string,"scores_locked_at"?: string | null,"slot_minutes"?: number,"slug": string,"timezone"?: string,"year": number
                   }
                   Update: {
-                    "checkin_closes_at"?: string | null,"checkin_opens_at"?: string | null,"created_at"?: string,"help_location"?: string | null,"id"?: string,"judging_starts_at"?: string | null,"name"?: string,"slot_minutes"?: number,"slug"?: string,"timezone"?: string,"year"?: number
+                    "checkin_closes_at"?: string | null,"checkin_opens_at"?: string | null,"created_at"?: string,"help_location"?: string | null,"id"?: string,"judging_starts_at"?: string | null,"name"?: string,"scores_locked_at"?: string | null,"slot_minutes"?: number,"slug"?: string,"timezone"?: string,"year"?: number
                   }
                   Relationships: [
                     
@@ -209,6 +209,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"rubric_criteria": {
+                  Row: {
+                    "description": string | null,"event_id": string,"id": string,"key": string,"label": string,"scale_max": number,"scale_min": number,"sort_order": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "description"?: string | null,"event_id": string,"id"?: string,"key": string,"label": string,"scale_max"?: number,"scale_min"?: number,"sort_order"?: number
+                  }
+                  Update: {
+                    "description"?: string | null,"event_id"?: string,"id"?: string,"key"?: string,"label"?: string,"scale_max"?: number,"scale_min"?: number,"sort_order"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "rubric_criteria_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"schedules": {
                   Row: {
                     "event_id": string,"generated_at": string,"generated_by": string | null,"id": string,"published_at": string | null,"round": number,"stats": Json | null,"status": Database["public"]['Enums']["schedule_status"],"version": number
@@ -229,16 +249,42 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"scores": {
+                },"score_items": {
                   Row: {
-                    "assignment_id": string,"created_at": string,"criterion": string,"id": string,"judge_id": string,"notes": string | null,"updated_at": string,"value": number | null
+                    "criterion_id": string,"id": string,"score_id": string,"value": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "assignment_id": string,"created_at"?: string,"criterion": string,"id"?: string,"judge_id": string,"notes"?: string | null,"updated_at"?: string,"value"?: number | null
+                    "criterion_id": string,"id"?: string,"score_id": string,"value": number
                   }
                   Update: {
-                    "assignment_id"?: string,"created_at"?: string,"criterion"?: string,"id"?: string,"judge_id"?: string,"notes"?: string | null,"updated_at"?: string,"value"?: number | null
+                    "criterion_id"?: string,"id"?: string,"score_id"?: string,"value"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "score_items_criterion_id_fkey"
+      columns: ["criterion_id"]
+isOneToOne: false
+      referencedRelation: "rubric_criteria"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "score_items_score_id_fkey"
+      columns: ["score_id"]
+isOneToOne: false
+      referencedRelation: "scores"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"scores": {
+                  Row: {
+                    "assignment_id": string,"created_at": string,"id": string,"judge_id": string,"notes": string | null,"submitted_at": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "assignment_id": string,"created_at"?: string,"id"?: string,"judge_id": string,"notes"?: string | null,"submitted_at"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "assignment_id"?: string,"created_at"?: string,"id"?: string,"judge_id"?: string,"notes"?: string | null,"submitted_at"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -375,6 +421,9 @@ isOneToOne: false
 "board_view":
 { Args: { "p_event_slug": string }; Returns: Json
                            },
+"can_score":
+{ Args: { "p_assignment": string }; Returns: boolean
+                           },
 "check_in_team":
 { Args: { "p": Json }; Returns: Json
                            },
@@ -399,6 +448,9 @@ isOneToOne: false
 "my_team_ids":
 { Args: Record<PropertyKey, never>; Returns: string[]
                            },
+"my_writable_score":
+{ Args: { "p_score": string }; Returns: boolean
+                           },
 "public_board":
 { Args: { "p_event_slug": string }; Returns: {
               "location_text": string,"panel_label": string,"slot_index": number,"starts_at": string,"team_name": string
@@ -409,6 +461,9 @@ isOneToOne: false
                            },
 "rate_limit_hit":
 { Args: { "p_key": string,"p_max": number,"p_window_seconds": number }; Returns: boolean
+                           },
+"seed_default_rubric":
+{ Args: { "p_event": string }; Returns: undefined
                            },
 "team_schedule_by_code":
 { Args: { "p_code": string }; Returns: {

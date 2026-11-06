@@ -197,14 +197,14 @@ begin
   perform test_assert(n = 1, 'judge sees only teams assigned to their panel');
 
   -- may score their own panel's assignment
-  insert into public.scores (assignment_id, judge_id, criterion, value)
-  values ('60000000-0000-0000-0000-000000000011','d0000000-0000-0000-0000-000000000001','impact',8);
+  insert into public.scores (assignment_id, judge_id, notes)
+  values ('60000000-0000-0000-0000-000000000011','d0000000-0000-0000-0000-000000000001','clear demo');
   perform test_assert(true, 'judge CAN score a team at their own station');
 
   -- may NOT score another panel's assignment
   begin
-    insert into public.scores (assignment_id, judge_id, criterion, value)
-    values ('60000000-0000-0000-0000-000000000012','d0000000-0000-0000-0000-000000000001','impact',3);
+    insert into public.scores (assignment_id, judge_id)
+    values ('60000000-0000-0000-0000-000000000012','d0000000-0000-0000-0000-000000000001');
     ok := false;
   exception when insufficient_privilege or others then ok := true;
   end;
@@ -212,8 +212,8 @@ begin
 
   -- may NOT impersonate another judge
   begin
-    insert into public.scores (assignment_id, judge_id, criterion, value)
-    values ('60000000-0000-0000-0000-000000000011','d0000000-0000-0000-0000-000000000002','impact',1);
+    insert into public.scores (assignment_id, judge_id)
+    values ('60000000-0000-0000-0000-000000000011','d0000000-0000-0000-0000-000000000002');
     ok := false;
   exception when insufficient_privilege or others then ok := true;
   end;
@@ -657,6 +657,93 @@ begin
   update public.schedules set status = 'published'
    where id = '50000000-0000-0000-0000-000000000002';
   update public.teams set withdrawn_at = null where id in (alpha, bravo);
+end $$;
+
+-- ---- 0014: scoring -----------------------------------------------------------
+-- The irreplaceable piece (docs/phase-5-spec.md). The AWS judge's score on
+-- Alpha's published Station 1 assignment exists from section 3.
+do $$
+declare
+  ok boolean; n int;
+  ev     constant uuid := 'e0000000-0000-0000-0000-000000000001';
+  aws    constant uuid := 'd0000000-0000-0000-0000-000000000001';
+  score  uuid;
+  impact uuid;
+  tech   uuid;
+begin
+  perform public.seed_default_rubric(ev);
+  select id into impact from public.rubric_criteria where event_id = ev and key = 'impact';
+  select id into tech from public.rubric_criteria where event_id = ev and key = 'technical';
+  select id into score from public.scores
+   where assignment_id = '60000000-0000-0000-0000-000000000011' and judge_id = aws;
+
+  perform become('33333333-3333-3333-3333-333333333333');   -- AWS judge, Station 1
+  insert into public.score_items (score_id, criterion_id, value) values (score, impact, 4);
+  update public.score_items set value = 5 where score_id = score and criterion_id = impact;
+  get diagnostics n = row_count;
+  perform test_assert(n = 1, '0014: a judge can score and revise their own team on the rubric');
+  begin
+    insert into public.score_items (score_id, criterion_id, value) values (score, tech, 6);
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform test_assert(ok, '0014: a value outside the criterion''s scale is refused');
+  begin
+    -- Alpha at Station 1 on the DRAFT schedule: the judge's own station.
+    insert into public.scores (assignment_id, judge_id)
+    values ('60000000-0000-0000-0000-000000000001', aws);
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform test_assert(ok, '0014: a judge cannot score an assignment on a draft schedule, even at their own station');
+  reset role;
+
+  perform become('44444444-4444-4444-4444-444444444444');   -- A10 judge, Station 2
+  begin
+    insert into public.score_items (score_id, criterion_id, value) values (score, tech, 1);
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform test_assert(ok, '0014: a judge cannot write values onto another judge''s score');
+  select count(*) into n from public.score_items;
+  perform test_assert(n = 0, '0014: a judge cannot read another judge''s values');
+  reset role;
+
+  -- THE ONE THAT MATTERS: a participant never reads scores, not even their
+  -- own team's (Alpha's captain; Alpha has just been scored).
+  perform become('11111111-1111-1111-1111-111111111111');
+  select count(*) into n from public.scores;
+  perform test_assert(n = 0, '0014: a participant cannot read any score, including their own team''s');
+  select count(*) into n from public.score_items;
+  perform test_assert(n = 0, '0014: a participant cannot read any score values');
+  begin
+    insert into public.rubric_criteria (event_id, key, label) values (ev, 'mine', 'Mine');
+    ok := false;
+  exception when insufficient_privilege then ok := true;
+  end;
+  perform test_assert(ok, '0014: a participant cannot change the rubric');
+  reset role;
+
+  perform become_anon();
+  select count(*) into n from public.scores;
+  perform test_assert(n = 0, '0014: anonymous visitors cannot read scores');
+  reset role;
+
+  -- Locked: the numbers used to pick winners can't move.
+  update public.events set scores_locked_at = now() where id = ev;
+  perform become('33333333-3333-3333-3333-333333333333');
+  update public.score_items set value = 1 where score_id = score;
+  get diagnostics n = row_count;
+  perform test_assert(n = 0, '0014: once the event is locked, a judge cannot change a value');
+  reset role;
+
+  perform become('55555555-5555-5555-5555-555555555555');
+  select count(*) into n from public.score_items where score_id = score and value = 5;
+  perform test_assert(n = 1, '0014: an organizer reads every value, and the locked one is unchanged');
+  reset role;
+
+  update public.events set scores_locked_at = null where id = ev;
+  delete from public.scores;
 end $$;
 
 \echo ''

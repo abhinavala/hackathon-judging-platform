@@ -6,6 +6,10 @@ export type StationTeam = {
   team: string;
   startsAt: string;
   endsAt: string;
+  /** For the link to score entry (Phase 5). */
+  assignmentId?: string;
+  /** This judge's score so far: every criterion, some, or none. */
+  scored?: "complete" | "partial" | null;
 };
 
 export type StationRow = StationTeam & {

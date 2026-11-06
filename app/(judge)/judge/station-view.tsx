@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { stationRows, type StationTeam } from "@/lib/judge/station";
 import { slotRange } from "@/lib/team/view";
@@ -73,16 +74,36 @@ export function StationView({
                   </span>
                 )}
                 <span className="tabular-nums">{slotRange(r, timeZone)}</span>{" "}
-                <span className={r.state === "done" ? "" : "font-bold"}>
-                  {r.team}
-                </span>
+                {r.assignmentId ? (
+                  <Link
+                    href={`/judge/score/${r.assignmentId}`}
+                    className={`underline ${r.state === "done" ? "" : "font-bold"}`}
+                  >
+                    {r.team}
+                  </Link>
+                ) : (
+                  <span className={r.state === "done" ? "" : "font-bold"}>
+                    {r.team}
+                  </span>
+                )}
+                {r.scored === "complete" && (
+                  <span className="ml-2 font-semibold text-green-800">
+                    ✓ scored
+                  </span>
+                )}
+                {r.scored === "partial" && (
+                  <span className="ml-2 font-semibold text-amber-800">
+                    partly scored
+                  </span>
+                )}
               </li>
             ))}
           </ol>
         </section>
       ))}
       <p className="text-sm text-gray-600">
-        Published schedule v{version}. This page keeps itself up to date.
+        Tap a team to score it. Published schedule v{version}. This page keeps
+        itself up to date.
       </p>
     </>
   );
