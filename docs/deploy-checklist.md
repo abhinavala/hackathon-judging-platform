@@ -85,6 +85,16 @@ email_sent = 1000`. Production doesn't send through Supabase's mailer.
       never against the request Host header (lib/server-env.ts `siteUrl()`):
   - **Production:** set `SITE_URL` to the production origin. Missing it fails
     the request rather than guessing.
+  - [x] **Production value: `https://judging.scuacm.com`** (no trailing
+    slash; set 2026-11-05). Vercel's "Rotate" marked it **Sensitive**, so the
+    dashboard can't show it any more, only overwrite it. This line is the
+    record. A changed value only takes effect on a **new** deployment:
+    never "Redeploy" an old one to pick it up, because that rolls `main`
+    back to that commit. Verified on production `11e0011` (#15): the
+    check-in welcome page, which prints `siteUrl()` (the base every sign-in
+    link is minted on), reads `judging.scuacm.com`. Supabase's Site URL and
+    redirect allowlist list the new domain too; the old `.vercel.app`
+    callback is still on the allowlist.
   - **Preview:** nothing to set. Each preview uses its own `VERCEL_URL`, and
     `SITE_URL` is ignored on previews on purpose, so a value scoped to "All
     Environments" can't make previews mint links into production.
@@ -92,7 +102,7 @@ email_sent = 1000`. Production doesn't send through Supabase's mailer.
     at our own `/auth/callback`, which verifies the `token_hash` server-side.
     Supabase's redirect allowlist only applies to links Supabase sends itself.
 - [ ] **Vercel Deployment Protection.** Observed on this project: the
-      production domain (`hackathon-judging-platform.vercel.app`) is public;
+      production domains (`judging.scuacm.com`, `hackathon-judging-platform.vercel.app`) are public;
       every per-deployment URL (`hackathon-judging-platform-<hash>-...vercel.app`),
       previews included, redirects to Vercel login. So a sign-in link opened
       on a phone against a preview hits that wall first. Fine for us testing;
