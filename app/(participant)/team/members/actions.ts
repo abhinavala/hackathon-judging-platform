@@ -8,7 +8,7 @@ import { normalizeEmail } from "@/lib/auth/email";
 import { mintSignInLink } from "@/lib/auth/magic-link";
 import { getLinkSender, sendAll } from "@/lib/auth/senders";
 import { clearDeliveryFailures } from "@/lib/checkin/delivery";
-import { MAX_TEAM_SIZE } from "@/lib/checkin/form";
+import { MAX_TEAM_SIZE, TEAM_CAP_REASON } from "@/lib/checkin/form";
 import { allow, LIMITS } from "@/lib/rate-limit";
 import {
   deleteUnusedAccount,
@@ -30,8 +30,7 @@ async function captainsTeam(): Promise<MyTeam> {
   if (!ctx.teamId) back({ error: "You're not on a team." });
   const team = await loadMyTeam(ctx.teamId, ctx.user.id);
   if (!team) back({ error: "Your team couldn't be loaded." });
-  // RLS lets any member write team_members; changing who is on the team is
-  // the captain's call, so it's checked here.
+  // Also enforced by RLS (0010); checked here to say so plainly.
   if (!team.iAmCaptain)
     back({ error: "Only your team's captain can change teammates." });
   return team;
@@ -125,7 +124,9 @@ export async function resendInvite(form: FormData) {
 export async function addTeammate(form: FormData) {
   const team = await captainsTeam();
   if (team.members.length >= MAX_TEAM_SIZE)
-    back({ error: `Teams are at most ${MAX_TEAM_SIZE} people.` });
+    back({
+      error: `Your team already has ${MAX_TEAM_SIZE}. ${TEAM_CAP_REASON}`,
+    });
   const email = normalizeEmail(form.get("email"));
   if (!email) back({ error: "That doesn't look like an email address." });
   if (team.members.some((m) => m.email === email))
@@ -144,7 +145,9 @@ export async function addTeammate(form: FormData) {
     back({
       error: /already_on_a_team/.test(error.message)
         ? `${email} is already on another team that has checked in.`
-        : `Not added: ${error.message}`,
+        : /team_full/.test(error.message)
+          ? `Not added: your team already has ${MAX_TEAM_SIZE}. ${TEAM_CAP_REASON}`
+          : `Not added: ${error.message}`,
     });
   const sent = await invite(team, email);
   revalidatePath(PATH);

@@ -23,7 +23,39 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "announcements": {
+            "access_codes": {
+                  Row: {
+                    "amount": number | null,"aws_account_id": string | null,"aws_state": string | null,"aws_team_name": string | null,"claimed_at": string | null,"claimed_email": string | null,"code": string,"details": NonNullable<Json>,"event_id": string,"expires_at": string | null,"expires_text": string | null,"id": string,"imported_at": string,"join_url": string | null,"kind": string,"last_joined": string | null,"member_id": string | null,"participant_count": number | null,"redemption_url": string | null,"seq": number,"team_id": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount"?: number | null,"aws_account_id"?: string | null,"aws_state"?: string | null,"aws_team_name"?: string | null,"claimed_at"?: string | null,"claimed_email"?: string | null,"code": string,"details"?: NonNullable<Json>,"event_id": string,"expires_at"?: string | null,"expires_text"?: string | null,"id"?: string,"imported_at"?: string,"join_url"?: string | null,"kind": string,"last_joined"?: string | null,"member_id"?: string | null,"participant_count"?: number | null,"redemption_url"?: string | null,"seq"?: never,"team_id"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "amount"?: number | null,"aws_account_id"?: string | null,"aws_state"?: string | null,"aws_team_name"?: string | null,"claimed_at"?: string | null,"claimed_email"?: string | null,"code"?: string,"details"?: NonNullable<Json>,"event_id"?: string,"expires_at"?: string | null,"expires_text"?: string | null,"id"?: string,"imported_at"?: string,"join_url"?: string | null,"kind"?: string,"last_joined"?: string | null,"member_id"?: string | null,"participant_count"?: number | null,"redemption_url"?: string | null,"seq"?: never,"team_id"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "access_codes_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "access_codes_member_id_fkey"
+      columns: ["member_id"]
+isOneToOne: false
+      referencedRelation: "team_members"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "access_codes_team_id_fkey"
+      columns: ["team_id"]
+isOneToOne: false
+      referencedRelation: "teams"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"announcements": {
                   Row: {
                     "active": boolean,"body": string,"created_at": string,"created_by": string | null,"event_id": string,"id": string,"level": Database["public"]['Enums']["announcement_level"]
                   }
@@ -323,14 +355,14 @@ isOneToOne: false
                   ]
                 },"team_members": {
                   Row: {
-                    "created_at": string,"email": string,"full_name": string | null,"is_captain": boolean,"team_id": string,"user_id": string | null
+                    "created_at": string,"email": string,"full_name": string | null,"id": string,"is_captain": boolean,"team_id": string,"user_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"email": string,"full_name"?: string | null,"is_captain"?: boolean,"team_id": string,"user_id"?: string | null
+                    "created_at"?: string,"email": string,"full_name"?: string | null,"id"?: string,"is_captain"?: boolean,"team_id": string,"user_id"?: string | null
                   }
                   Update: {
-                    "created_at"?: string,"email"?: string,"full_name"?: string | null,"is_captain"?: boolean,"team_id"?: string,"user_id"?: string | null
+                    "created_at"?: string,"email"?: string,"full_name"?: string | null,"id"?: string,"is_captain"?: boolean,"team_id"?: string,"user_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -427,11 +459,23 @@ isOneToOne: false
 "check_in_team":
 { Args: { "p": Json }; Returns: Json
                            },
+"claim_access_codes":
+{ Args: { "p_member": string }; Returns: undefined
+                           },
+"claim_missing_codes":
+{ Args: { "p_event": string }; Returns: number
+                           },
 "is_organizer":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "is_schedule_published":
 { Args: { "p_schedule": string }; Returns: boolean
+                           },
+"max_team_size":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
+"my_access_codes":
+{ Args: Record<PropertyKey, never>; Returns: Json
                            },
 "my_captain_team_ids":
 { Args: Record<PropertyKey, never>; Returns: string[]
@@ -464,6 +508,9 @@ isOneToOne: false
                            },
 "seed_default_rubric":
 { Args: { "p_event": string }; Returns: undefined
+                           },
+"set_team_devpost":
+{ Args: { "p_team": string,"p_url": string }; Returns: undefined
                            },
 "team_schedule_by_code":
 { Args: { "p_code": string }; Returns: {

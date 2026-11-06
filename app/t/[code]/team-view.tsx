@@ -338,6 +338,13 @@ export function TeamViewClient({
             </p>
           )}
           <p>
+            <a href="/team" className="font-semibold underline">
+              Your team page
+            </a>{" "}
+            has your AWS workshop code, your Kiro credits and your Devpost link
+            (sign in from your email; they&apos;re never shown here).
+          </p>
+          <p>
             Captain?{" "}
             <a href="/team/members" className="underline">
               Fix a teammate&apos;s email or resend an invitation

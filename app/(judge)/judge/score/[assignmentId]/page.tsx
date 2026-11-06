@@ -94,8 +94,8 @@ export default async function ScorePage({
           event?.timezone ?? "America/Los_Angeles",
         )}
       </p>
-      {a.teams.devpost_url && (
-        <p className="mt-1">
+      <p className="mt-1" data-testid="devpost">
+        {a.teams.devpost_url ? (
           <a
             href={a.teams.devpost_url}
             target="_blank"
@@ -104,8 +104,10 @@ export default async function ScorePage({
           >
             Their Devpost page
           </a>
-        </p>
-      )}
+        ) : (
+          "Devpost: no link provided."
+        )}
+      </p>
       <ScoreForm
         assignmentId={assignmentId}
         judgeId={ctx.judgeId!}

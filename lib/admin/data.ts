@@ -8,6 +8,7 @@ import {
   type ReviewInput,
   type ReviewWarning,
 } from "@/lib/admin/review";
+import type { CodeTeam, PoolCode } from "@/lib/admin/codes";
 
 // Reads for the organizer screens. Everything goes through the organizer's
 // own session (RLS: organizers see everything), never the service role.
@@ -464,4 +465,69 @@ export async function loadScheduleView(
           : null,
     },
   };
+}
+
+/** The access-code pool (0015). Organizer-only by RLS. */
+export async function loadCodePool(
+  db: Db,
+  eventId: string,
+): Promise<PoolCode[]> {
+  const rows = must(
+    await db
+      .from("access_codes")
+      .select(
+        "kind, code, team_id, member_id, claimed_email, claimed_at, aws_team_name, aws_account_id, aws_state, participant_count, last_joined",
+      )
+      .eq("event_id", eventId)
+      .order("seq")
+      .limit(5000),
+    "access_codes",
+  );
+  return rows.map((r) => ({
+    kind: r.kind as PoolCode["kind"],
+    code: r.code,
+    teamId: r.team_id,
+    memberId: r.member_id,
+    claimedEmail: r.claimed_email,
+    claimed: r.claimed_at !== null,
+    awsTeamName: r.aws_team_name,
+    awsAccountId: r.aws_account_id,
+    state: r.aws_state,
+    participantCount: r.participant_count,
+    lastJoined: r.last_joined,
+  }));
+}
+
+export type ActiveTeam = CodeTeam & {
+  devpostUrl: string | null;
+  captainEmail: string | null;
+  contactPhone: string | null;
+};
+
+/** Checked-in, non-withdrawn teams with their members: who codes are for. */
+export async function loadActiveTeams(
+  db: Db,
+  eventId: string,
+): Promise<ActiveTeam[]> {
+  const rows = must(
+    await db
+      .from("teams")
+      .select(
+        "id, name, join_code, devpost_url, contact_phone, team_members(id, email, is_captain)",
+      )
+      .eq("event_id", eventId)
+      .not("checked_in_at", "is", null)
+      .is("withdrawn_at", null)
+      .order("name"),
+    "teams",
+  );
+  return rows.map((t) => ({
+    id: t.id,
+    name: t.name,
+    joinCode: t.join_code,
+    devpostUrl: t.devpost_url,
+    contactPhone: t.contact_phone,
+    captainEmail: t.team_members.find((m) => m.is_captain)?.email ?? null,
+    members: t.team_members.map((m) => ({ id: m.id, email: m.email })),
+  }));
 }

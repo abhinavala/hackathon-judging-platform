@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/session";
-import { MAX_TEAM_SIZE } from "@/lib/checkin/form";
+import { MAX_TEAM_SIZE, TEAM_CAP_REASON } from "@/lib/checkin/form";
 import { loadMyTeam } from "@/lib/team/members";
 import { addTeammate, correctEmail, resendInvite } from "./actions";
 
@@ -39,8 +39,8 @@ export default async function TeamMembersPage({
       <h1 className="mb-1 text-2xl font-semibold">{team.name}: teammates</h1>
       <p className="mb-4">
         Join code <strong className="font-mono">{team.joinCode}</strong> ·{" "}
-        <Link href={`/t/${team.joinCode}`} className="underline">
-          Your schedule
+        <Link href="/team" className="underline">
+          Your team page
         </Link>
       </p>
       {(ok || error) && (
@@ -111,10 +111,15 @@ export default async function TeamMembersPage({
           </label>
           <button className={button}>Add and invite</button>
           <p className="text-sm">
-            Teams are at most {MAX_TEAM_SIZE} people; you have{" "}
-            {team.members.length}.
+            You have {team.members.length} of {MAX_TEAM_SIZE}. {TEAM_CAP_REASON}
           </p>
         </form>
+      )}
+      {team.iAmCaptain && team.members.length >= MAX_TEAM_SIZE && (
+        <p className="rounded border p-3" data-testid="team-full">
+          Your team has {team.members.length}, the most allowed.{" "}
+          {TEAM_CAP_REASON}
+        </p>
       )}
     </main>
   );

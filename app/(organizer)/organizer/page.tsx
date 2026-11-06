@@ -2,13 +2,18 @@ import Link from "next/link";
 import {
   adminDb,
   currentEvent,
+  loadActiveTeams,
   loadCheckinEmails,
+  loadCodePool,
   loadJudges,
   loadSchedules,
   loadStations,
   loadTeams,
 } from "@/lib/admin/data";
 import { preflight } from "@/lib/scheduler";
+import { missingCodes, poolSummary } from "@/lib/admin/codes";
+import { MAX_TEAM_SIZE } from "@/lib/checkin/form";
+import { MissingCodesTable, PoolAlarms } from "./codes/missing";
 import { clockWithZone, dayLabel } from "@/lib/team/view";
 import { Section, table } from "./_ui/ui";
 
@@ -21,13 +26,19 @@ export default async function OrganizerPage() {
   const db = await adminDb();
   const event = await currentEvent(db);
   if (!event) return <p>No event exists yet.</p>;
-  const [judges, stations, teams, schedules, emails] = await Promise.all([
-    loadJudges(db, event.id),
-    loadStations(db, event.id),
-    loadTeams(db, event.id),
-    loadSchedules(db, event.id),
-    loadCheckinEmails(db, event.id),
-  ]);
+  const [judges, stations, teams, schedules, emails, pool, active] =
+    await Promise.all([
+      loadJudges(db, event.id),
+      loadStations(db, event.id),
+      loadTeams(db, event.id),
+      loadSchedules(db, event.id),
+      loadCheckinEmails(db, event.id),
+      loadCodePool(db, event.id),
+      loadActiveTeams(db, event.id),
+    ]);
+  const codes = poolSummary(pool, active, MAX_TEAM_SIZE);
+  const codesMissing = missingCodes(active, pool);
+  const noDevpost = active.filter((t) => !t.devpostUrl);
   const emailProblems = emails.filter((e) => e.status === "failed" || e.stuck);
   const emailsSent = emails.filter((e) => e.status === "sent").length;
   const emailsSending = emails.filter(
@@ -44,6 +55,7 @@ export default async function OrganizerPage() {
   return (
     <main>
       <h1 className="mb-4 text-xl font-semibold">{event.name}</h1>
+      <PoolAlarms summary={codes} />
       <Section title="At a glance">
         <table className={`${table} w-auto`}>
           <tbody>
@@ -87,6 +99,23 @@ export default async function OrganizerPage() {
                     (emailProblems.length
                       ? `, ${emailProblems.length} with emails not sent (below)`
                       : "")}
+              </td>
+            </tr>
+            <tr>
+              <th>AWS codes</th>
+              <td>
+                <Link href="/organizer/codes" className="underline">
+                  {codes.workshop.free} workshop, {codes.kiro.free} Kiro free
+                </Link>
+                {codesMissing.length > 0 &&
+                  ` — ${codesMissing.length} team(s) missing codes (below)`}
+              </td>
+            </tr>
+            <tr>
+              <th>Devpost links</th>
+              <td>
+                {active.length - noDevpost.length} of {active.length} teams
+                {noDevpost.length > 0 && " — the rest are listed below"}
               </td>
             </tr>
             <tr>
@@ -172,6 +201,49 @@ export default async function OrganizerPage() {
               ))}
             </tbody>
           </table>
+        </Section>
+      )}
+      {codesMissing.length > 0 && (
+        <Section title="Teams missing AWS codes">
+          <p className="mb-2 text-sm">
+            Their check-in worked; they just have no code to show yet.{" "}
+            <Link href="/organizer/codes" className="underline">
+              Import more or assign what&apos;s free
+            </Link>
+            .
+          </p>
+          <MissingCodesTable missing={codesMissing} summary={codes} />
+        </Section>
+      )}
+      {noDevpost.length > 0 && (
+        <Section title={`Teams without a Devpost link (${noDevpost.length})`}>
+          <p className="mb-2 text-sm">
+            Any member can add it on their team page (/team), before judging or
+            after. Judges see &ldquo;no link provided&rdquo; until then.
+          </p>
+          <details>
+            <summary className="cursor-pointer text-sm">Who to chase</summary>
+            <table className={`${table} mt-2`} data-testid="no-devpost">
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>Join code</th>
+                  <th>Captain</th>
+                  <th>Phone</th>
+                </tr>
+              </thead>
+              <tbody>
+                {noDevpost.map((t) => (
+                  <tr key={t.id}>
+                    <td>{t.name}</td>
+                    <td className="font-mono">{t.joinCode}</td>
+                    <td>{t.captainEmail ?? ""}</td>
+                    <td>{t.contactPhone ?? ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
         </Section>
       )}
       <p className="text-sm">
