@@ -2533,6 +2533,22 @@ async function run() {
         ).includes("Pool Empty"),
       "devpost: the dashboard lists the teams without a link, to chase",
     );
+    {
+      const ov = (await get("/organizer", org.cookie)).html;
+      const { data: act } = await db
+        .from("teams")
+        .select("github_urls")
+        .not("checked_in_at", "is", null)
+        .is("withdrawn_at", null);
+      const without = act.filter((t) => !t.github_urls?.length).length;
+      check(
+        without > 0 &&
+          text(ov).includes(`Teams without a GitHub link (${without})`) &&
+          ov.includes('data-testid="no-github"'),
+        "github: the dashboard lists the teams without a GitHub link, to chase",
+        `${without}`,
+      );
+    }
 
     // Import: a preview first, nothing written; then the import.
     const { data: active } = await db
