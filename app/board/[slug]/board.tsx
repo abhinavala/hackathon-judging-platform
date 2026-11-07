@@ -329,7 +329,7 @@ function BigRow({
       {row.cells.map((c) => (
         <li
           key={c.station}
-          className={`flex min-h-0 flex-col justify-center overflow-hidden rounded-[calc(var(--u)*0.8)] px-[calc(var(--u)*1.2)] py-[calc(var(--u)*1)] ${
+          className={`flex min-h-0 flex-col justify-center-safe overflow-hidden rounded-[calc(var(--u)*0.8)] px-[calc(var(--u)*1.2)] py-[calc(var(--u)*1)] ${
             c.team ? "bg-slate-800" : "bg-slate-900 text-slate-500"
           } ${tone === "switch" ? "ring-[calc(var(--u)*0.3)] ring-amber-400 ring-inset" : ""}`}
         >
