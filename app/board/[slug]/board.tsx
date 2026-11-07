@@ -336,12 +336,12 @@ function BigRow({
           <p className="text-[length:calc(var(--u)*1.9)] font-black tracking-wide text-sky-200 uppercase">
             {c.station}
           </p>
-          <p className="text-[length:calc(var(--u)*2.2)] leading-tight font-bold break-words">
+          <p className="text-[length:calc(var(--u)*2)] leading-tight font-bold break-words">
             {c.team ?? "—"}
           </p>
           {c.location && (
             <p
-              className={`mt-[calc(var(--u)*0.4)] text-[length:calc(var(--u)*2.6)] leading-tight font-extrabold break-words ${
+              className={`mt-[calc(var(--u)*0.4)] text-[length:calc(var(--u)*2.3)] leading-tight font-extrabold break-words ${
                 tone === "switch" ? "text-amber-200" : "text-yellow-100"
               }`}
             >
