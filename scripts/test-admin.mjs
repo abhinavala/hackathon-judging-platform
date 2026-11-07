@@ -952,6 +952,46 @@ async function run() {
     "imported teams appear on the generate screen, checked in",
   );
 
+  // A track nobody chose is asked about too (set up on check-in morning,
+  // next to Save), and the button doesn't look like Save.
+  {
+    const { data: spare } = await db
+      .from("tracks")
+      .insert({ event_id: ev.id, name: "Misclick Test", sort_order: 99 })
+      .select("id")
+      .single();
+    const page = (await get("/organizer/tracks", org.cookie)).html;
+    const first = await submit(
+      "/organizer/tracks",
+      org.cookie,
+      `name="id" value="${spare.id}"/><button`,
+      {},
+    );
+    const { count: kept } = await db
+      .from("tracks")
+      .select("id", { count: "exact", head: true })
+      .eq("id", spare.id);
+    const ask = text(
+      (await get(`/organizer/tracks?confirmDelete=${spare.id}`, org.cookie))
+        .html,
+    );
+    const done = await submit(
+      `/organizer/tracks?confirmDelete=${spare.id}`,
+      org.cookie,
+      'name="confirm" value="yes"',
+      {},
+    );
+    check(
+      first.url?.searchParams.get("confirmDelete") === spare.id &&
+        kept === 1 &&
+        ask.includes("Delete “Misclick Test”? No team has selected it yet.") &&
+        flash(done.url) === "Track deleted." &&
+        /border-red-700[^"]*"[^>]*>Delete…/.test(page),
+      "tracks screen: even a track no team chose asks before deleting, and Delete is red, not Save-styled",
+      `${first.url} ${kept} ${flash(done.url)}`,
+    );
+  }
+
   // Deleting a track teams selected asks first, then removes the selections.
   const { data: gameTrack } = await db
     .from("tracks")

@@ -4,7 +4,7 @@ import {
   loadJudges,
   loadTracks,
 } from "@/lib/admin/data";
-import { Flash, Section, button, input, table } from "../_ui/ui";
+import { Flash, Section, button, danger, input, table } from "../_ui/ui";
 import { addTrack, deleteTrack, updateTrack } from "./actions";
 
 // Reads the organizer's session; blocks on the server rather than
@@ -69,16 +69,27 @@ export default async function TracksPage({
           className="mb-6 rounded border-2 border-red-600 p-3 text-sm"
         >
           <p className="mb-2 font-semibold">
-            {selected(confirming.id)} team
-            {selected(confirming.id) === 1 ? " has" : "s have"} selected &ldquo;
-            {confirming.name}&rdquo;. Deleting it removes it from their
-            selections.
+            {selected(confirming.id) === 0 ? (
+              <>
+                Delete &ldquo;{confirming.name}&rdquo;? No team has selected it
+                yet.
+              </>
+            ) : (
+              <>
+                {selected(confirming.id)} team
+                {selected(confirming.id) === 1 ? " has" : "s have"} selected
+                &ldquo;{confirming.name}&rdquo;. Deleting it removes it from
+                their selections.
+              </>
+            )}
           </p>
           <div className="flex gap-2">
             <form action={deleteTrack}>
               <input type="hidden" name="id" value={confirming.id} />
               <input type="hidden" name="confirm" value="yes" />
-              <button className={button}>Delete anyway</button>
+              <button className={danger}>
+                {selected(confirming.id) === 0 ? "Delete" : "Delete anyway"}
+              </button>
             </form>
             <a href="/organizer/tracks" className={button}>
               Cancel
@@ -139,9 +150,9 @@ export default async function TracksPage({
                 </td>
                 <td>{selected(t.id)}</td>
                 <td>
-                  <form action={deleteTrack}>
+                  <form action={deleteTrack} className="ml-6">
                     <input type="hidden" name="id" value={t.id} />
-                    <button className={button}>Delete</button>
+                    <button className={danger}>Delete…</button>
                   </form>
                 </td>
               </tr>

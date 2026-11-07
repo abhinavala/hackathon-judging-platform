@@ -43,5 +43,8 @@ export function Section({
 export const input = "rounded border px-2 py-1 text-sm";
 export const button =
   "rounded border px-3 py-1 text-sm font-medium hover:bg-black/5";
+/** Irreversible actions: never styled like Save. */
+export const danger =
+  "rounded border-2 border-red-700 px-3 py-1 text-sm font-semibold text-red-800 hover:bg-red-50 dark:border-red-400 dark:text-red-300 dark:hover:bg-red-950";
 export const table =
   "w-full border-collapse text-sm [&_td]:border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:text-left";

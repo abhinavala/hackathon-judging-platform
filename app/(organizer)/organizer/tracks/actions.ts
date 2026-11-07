@@ -71,7 +71,9 @@ export async function deleteTrack(form: FormData) {
     .select("team_id", { count: "exact", head: true })
     .eq("track_id", id);
   if (countError) back(PATH, { error: countError.message });
-  if (count && form.get("confirm") !== "yes") {
+  // Always asked first, teams or not: tracks are set up in a hurry on the
+  // morning of check-in, next to their Save buttons.
+  if (form.get("confirm") !== "yes") {
     redirect(`${PATH}?${new URLSearchParams({ confirmDelete: id })}`);
   }
   const { error } = await db.from("tracks").delete().eq("id", id);
