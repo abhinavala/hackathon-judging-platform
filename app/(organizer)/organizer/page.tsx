@@ -39,6 +39,7 @@ export default async function OrganizerPage() {
   const codes = poolSummary(pool, active, MAX_TEAM_SIZE);
   const codesMissing = missingCodes(active, pool);
   const noDevpost = active.filter((t) => !t.devpostUrl);
+  const noGithub = active.filter((t) => t.githubUrls.length === 0);
   const emailProblems = emails.filter((e) => e.status === "failed" || e.stuck);
   const emailsSent = emails.filter((e) => e.status === "sent").length;
   const emailsSending = emails.filter(
@@ -116,6 +117,13 @@ export default async function OrganizerPage() {
               <td>
                 {active.length - noDevpost.length} of {active.length} teams
                 {noDevpost.length > 0 && " — the rest are listed below"}
+              </td>
+            </tr>
+            <tr>
+              <th>GitHub links</th>
+              <td>
+                {active.length - noGithub.length} of {active.length} teams
+                {noGithub.length > 0 && " — the rest are listed below"}
               </td>
             </tr>
             <tr>
@@ -234,6 +242,37 @@ export default async function OrganizerPage() {
               </thead>
               <tbody>
                 {noDevpost.map((t) => (
+                  <tr key={t.id}>
+                    <td>{t.name}</td>
+                    <td className="font-mono">{t.joinCode}</td>
+                    <td>{t.captainEmail ?? ""}</td>
+                    <td>{t.contactPhone ?? ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        </Section>
+      )}
+      {noGithub.length > 0 && (
+        <Section title={`Teams without a GitHub link (${noGithub.length})`}>
+          <p className="mb-2 text-sm">
+            Any member can add them on their team page (/team). Kept for our
+            records; judges don&apos;t see them.
+          </p>
+          <details>
+            <summary className="cursor-pointer text-sm">Who to chase</summary>
+            <table className={`${table} mt-2`} data-testid="no-github">
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>Join code</th>
+                  <th>Captain</th>
+                  <th>Phone</th>
+                </tr>
+              </thead>
+              <tbody>
+                {noGithub.map((t) => (
                   <tr key={t.id}>
                     <td>{t.name}</td>
                     <td className="font-mono">{t.joinCode}</td>

@@ -500,6 +500,7 @@ export async function loadCodePool(
 
 export type ActiveTeam = CodeTeam & {
   devpostUrl: string | null;
+  githubUrls: string[];
   captainEmail: string | null;
   contactPhone: string | null;
 };
@@ -513,7 +514,7 @@ export async function loadActiveTeams(
     await db
       .from("teams")
       .select(
-        "id, name, join_code, devpost_url, contact_phone, team_members(id, email, is_captain)",
+        "id, name, join_code, devpost_url, github_urls, contact_phone, team_members(id, email, is_captain)",
       )
       .eq("event_id", eventId)
       .not("checked_in_at", "is", null)
@@ -526,6 +527,7 @@ export async function loadActiveTeams(
     name: t.name,
     joinCode: t.join_code,
     devpostUrl: t.devpost_url,
+    githubUrls: t.github_urls ?? [],
     contactPhone: t.contact_phone,
     captainEmail: t.team_members.find((m) => m.is_captain)?.email ?? null,
     members: t.team_members.map((m) => ({ id: m.id, email: m.email })),
