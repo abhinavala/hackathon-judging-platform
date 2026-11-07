@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/session";
 import { ORGANIZER_ROLES } from "@/lib/route-guards";
+import { loadPublicEvent } from "@/lib/event/public";
 
 // SECOND LINE OF DEFENSE. The real gate is the proxy (lib/supabase/proxy.ts),
 // which checks the role against lib/route-guards.ts and answers a mismatch
@@ -35,6 +36,8 @@ export default async function OrganizerLayout({
   children: React.ReactNode;
 }) {
   await requireRole(...ORGANIZER_ROLES);
+  // The board, for the screen in the room. Opens in a new tab.
+  const event = await loadPublicEvent().catch(() => null);
   return (
     <div className="mx-auto w-full max-w-6xl p-6 print:max-w-none print:p-0">
       <nav className="mb-6 print:hidden flex flex-wrap gap-4 border-b pb-3 text-sm">
@@ -47,6 +50,16 @@ export default async function OrganizerLayout({
             {label}
           </Link>
         ))}
+        {event && (
+          <a
+            href={`/board/${event.slug}`}
+            target="_blank"
+            rel="noreferrer"
+            className="underline-offset-4 hover:underline"
+          >
+            Board ↗
+          </a>
+        )}
       </nav>
       {children}
     </div>

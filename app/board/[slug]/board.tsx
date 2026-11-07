@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { boardMoment, type BoardRow, type BoardView } from "@/lib/board/view";
+import { phaseAt } from "@/lib/event/phases";
 import { HELP_FALLBACK, helpPlace } from "@/lib/event/copy";
 import {
   ago,
@@ -88,11 +89,23 @@ export function BoardClient({
   const { view, fetchedAt } = data;
   const stale = serverNow - fetchedAt > STALE_MS;
   const moment = boardMoment(view, serverNow);
+  // Display only, from the slot's own times and the clock above.
+  const phase =
+    moment.kind === "now"
+      ? phaseAt(
+          moment.row.slot.startsAt,
+          moment.row.slot.endsAt,
+          serverNow,
+          moment.next !== null,
+        )
+      : null;
+  const switching =
+    phase?.kind === "switch" && moment.kind === "now" && !!moment.next;
   const tz = view.found ? view.event.timezone : "America/Los_Angeles";
   const help = helpPlace(view.found ? view.event.helpLocation : null);
 
   return (
-    <Screen>
+    <Screen switching={switching}>
       <header className="flex items-baseline justify-between gap-[calc(var(--u)*2)] px-[calc(var(--u)*2.5)] pt-[calc(var(--u)*1.5)]">
         <p className="text-[length:calc(var(--u)*1.8)] font-semibold text-slate-300">
           {view.found ? view.event.name : "Judging"} · Judging schedule
@@ -184,17 +197,35 @@ export function BoardClient({
           </Centered>
         )}
 
-        {moment.kind === "now" && (
+        {moment.kind === "now" && phase?.kind === "switch" && moment.next ? (
+          // The last minutes of a slot: the whole board turns amber and
+          // shows who goes where next, for two minutes rather than one
+          // frame at the swap.
           <>
             <SlotHeading
-              label="Now"
-              range={slotRange(moment.row.slot, tz)}
-              note={`${formatWait(moment.minutesLeft)} left`}
-              live
+              label="Switch over"
+              range={slotRange(moment.next.slot, tz)}
+              note={phase.text}
+              tone="switch"
             />
-            <BigRow row={moment.row} />
-            {moment.next && <NextRow label="Next" row={moment.next} tz={tz} />}
+            <BigRow row={moment.next} tone="switch" />
+            <NextRow label="Finishing" row={moment.row} tz={tz} />
           </>
+        ) : (
+          moment.kind === "now" && (
+            <>
+              <SlotHeading
+                label="Now"
+                range={slotRange(moment.row.slot, tz)}
+                note={phase?.text ?? `${formatWait(moment.minutesLeft)} left`}
+                tone="live"
+              />
+              <BigRow row={moment.row} />
+              {moment.next && (
+                <NextRow label="Next" row={moment.next} tz={tz} />
+              )}
+            </>
+          )
         )}
 
         {moment.kind === "upcoming" && (
@@ -245,18 +276,22 @@ function SlotHeading({
   label,
   range,
   note,
-  live = false,
+  tone = "plain",
 }: {
   label: string;
   range: string;
   note: string;
-  live?: boolean;
+  tone?: "plain" | "live" | "switch";
 }) {
   return (
     <div className="mb-[calc(var(--u)*1.2)] flex flex-wrap items-baseline gap-x-[calc(var(--u)*2)]">
       <span
         className={`rounded-[calc(var(--u)*0.6)] px-[calc(var(--u)*1.2)] text-[length:calc(var(--u)*4.2)] font-black tracking-wide uppercase ${
-          live ? "bg-green-500 text-black" : "bg-white text-slate-950"
+          tone === "live"
+            ? "bg-green-500 text-black"
+            : tone === "switch"
+              ? "bg-amber-400 text-black"
+              : "bg-white text-slate-950"
         }`}
       >
         {label}
@@ -265,7 +300,9 @@ function SlotHeading({
         {range}
       </span>
       <span
-        className="text-[length:calc(var(--u)*2.6)] font-semibold text-slate-300"
+        className={`text-[length:calc(var(--u)*3)] font-bold tabular-nums ${
+          tone === "switch" ? "text-amber-300" : "text-white"
+        }`}
         suppressHydrationWarning
       >
         {note}
@@ -275,7 +312,13 @@ function SlotHeading({
 }
 
 /** Station cards for the slot that matters now, readable from the back. */
-function BigRow({ row }: { row: BoardRow }) {
+function BigRow({
+  row,
+  tone = "plain",
+}: {
+  row: BoardRow;
+  tone?: "plain" | "switch";
+}) {
   return (
     <ul
       className="grid min-h-0 flex-1 gap-[calc(var(--u)*1)]"
@@ -288,16 +331,20 @@ function BigRow({ row }: { row: BoardRow }) {
           key={c.station}
           className={`flex min-h-0 flex-col justify-center overflow-hidden rounded-[calc(var(--u)*0.8)] px-[calc(var(--u)*1.2)] py-[calc(var(--u)*1)] ${
             c.team ? "bg-slate-800" : "bg-slate-900 text-slate-500"
-          }`}
+          } ${tone === "switch" ? "ring-[calc(var(--u)*0.3)] ring-amber-400 ring-inset" : ""}`}
         >
-          <p className="text-[length:calc(var(--u)*1.7)] font-bold tracking-wide text-sky-300 uppercase">
+          <p className="text-[length:calc(var(--u)*1.9)] font-black tracking-wide text-sky-200 uppercase">
             {c.station}
           </p>
-          <p className="text-[length:calc(var(--u)*2.9)] leading-tight font-extrabold break-words">
+          <p className="text-[length:calc(var(--u)*2)] leading-tight font-bold break-words">
             {c.team ?? "—"}
           </p>
           {c.location && (
-            <p className="mt-[calc(var(--u)*0.3)] text-[length:calc(var(--u)*1.3)] text-slate-300">
+            <p
+              className={`mt-[calc(var(--u)*0.4)] text-[length:calc(var(--u)*2.3)] leading-tight font-extrabold break-words ${
+                tone === "switch" ? "text-amber-200" : "text-yellow-100"
+              }`}
+            >
               {c.location}
             </p>
           )}
@@ -348,10 +395,20 @@ function columns(n: number) {
   return 6;
 }
 
-function Screen({ children }: { children: React.ReactNode }) {
+function Screen({
+  children,
+  switching = false,
+}: {
+  children: React.ReactNode;
+  switching?: boolean;
+}) {
   return (
     <div
-      className="flex h-screen flex-col overflow-hidden bg-slate-950 text-white"
+      className={`flex h-screen flex-col overflow-hidden text-white ${
+        switching
+          ? "bg-amber-950 outline-[calc(var(--u)*0.8)] -outline-offset-[calc(var(--u)*0.8)] outline-amber-400 outline-solid"
+          : "bg-slate-950"
+      }`}
       // One unit for every size on the board: 1% of the width, unless the
       // screen is short for its width (a browser window, a wide projector),
       // when height decides. Everything fits above the fold at any aspect,

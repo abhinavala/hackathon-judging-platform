@@ -1,3 +1,4 @@
+import { phaseSummary, SLOT_PHASES } from "@/lib/event/phases";
 import { adminDb, currentEvent } from "@/lib/admin/data";
 import { utcToZonedLocal } from "@/lib/admin/time";
 import { HELP_FALLBACK, helpPlace } from "@/lib/event/copy";
@@ -43,6 +44,16 @@ export default async function EventSettingsPage({
               className={`${input} w-fit`}
             />
           </label>
+          <p className="mt-3 max-w-3xl text-sm" data-testid="slot-phases">
+            <strong>Within each slot</strong> ({event.slot_minutes} minutes):
+            presenting {SLOT_PHASES.presenting} min, questions{" "}
+            {SLOT_PHASES.questions} min, switch over{" "}
+            {event.slot_minutes -
+              SLOT_PHASES.presenting -
+              SLOT_PHASES.questions}{" "}
+            min. Fixed this year; display only (the board and judges&apos;
+            screens count it down), it never changes the schedule.
+          </p>
         </Section>
 
         <Section title="Check-in">
@@ -113,6 +124,13 @@ export default async function EventSettingsPage({
                   ? `Judging starts at ${clockWithZone(start, tz)} on ${dayLabel(start, tz)}. Check back closer to then.`
                   : "Check back closer to judging."}
               </q>
+            </li>
+            <li>
+              During judging, the board and judges&apos; screens:{" "}
+              <q>Presenting · 3:12 left</q>, then <q>Questions · 0:45 left</q>,
+              then the board turns amber:{" "}
+              <q>Switch over · 1:30 until next teams</q>. Each slot:{" "}
+              {phaseSummary(event.slot_minutes)}.
             </li>
             <li>
               A team that isn&apos;t scheduled:{" "}
