@@ -5,7 +5,14 @@ import { JUDGE_ROLES } from "@/lib/route-guards";
 import { createClient } from "@/lib/supabase/server";
 import { slotRange } from "@/lib/team/view";
 import type { Criterion, ScoreDraft } from "@/lib/judge/score-draft";
+import type { StationTeam } from "@/lib/judge/station";
+import { PhaseLine } from "../../phase-line";
 import { ScoreForm } from "./score-form";
+
+/** When this render happened, for the phase line's clock offset. */
+function renderTime() {
+  return Date.now();
+}
 
 // Score entry for one team (docs/phase-5-spec.md, item 2). Read as the
 // judge: RLS shows only their own station's published assignments and their
@@ -31,7 +38,7 @@ export default async function ScorePage({
   const { data: a } = await db
     .from("assignments")
     .select(
-      "id, status, teams(name, devpost_url), slots(starts_at, ends_at), schedules(status, event_id)",
+      "id, status, schedule_id, panel_id, teams(name, devpost_url), slots(starts_at, ends_at), schedules(status, event_id)",
     )
     .eq("id", assignmentId)
     .maybeSingle();
@@ -46,25 +53,44 @@ export default async function ScorePage({
     );
 
   const eventId = a.schedules.event_id;
-  const [{ data: event }, { data: rubric }, { data: score }] =
-    await Promise.all([
-      db
-        .from("events")
-        .select("timezone, scores_locked_at")
-        .eq("id", eventId)
-        .single(),
-      db
-        .from("rubric_criteria")
-        .select("id, label, description, scale_min, scale_max, sort_order")
-        .eq("event_id", eventId)
-        .order("sort_order"),
-      db
-        .from("scores")
-        .select("notes, updated_at, score_items(criterion_id, value)")
-        .eq("assignment_id", assignmentId)
-        .eq("judge_id", ctx.judgeId!)
-        .maybeSingle(),
-    ]);
+  const serverNow = renderTime();
+  const [
+    { data: event },
+    { data: rubric },
+    { data: score },
+    { data: station },
+  ] = await Promise.all([
+    db
+      .from("events")
+      .select("timezone, scores_locked_at")
+      .eq("id", eventId)
+      .single(),
+    db
+      .from("rubric_criteria")
+      .select("id, label, description, scale_min, scale_max, sort_order")
+      .eq("event_id", eventId)
+      .order("sort_order"),
+    db
+      .from("scores")
+      .select("notes, updated_at, score_items(criterion_id, value)")
+      .eq("assignment_id", assignmentId)
+      .eq("judge_id", ctx.judgeId!)
+      .maybeSingle(),
+    // This station's teams, for the phase line: who's on now, and the clock.
+    db
+      .from("assignments")
+      .select("teams(name), slots(starts_at, ends_at)")
+      .eq("schedule_id", a.schedule_id)
+      .eq("panel_id", a.panel_id)
+      .neq("status", "cancelled"),
+  ]);
+  const stationTeams: StationTeam[] = (station ?? [])
+    .filter((r) => r.teams && r.slots)
+    .map((r) => ({
+      team: r.teams!.name,
+      startsAt: r.slots!.starts_at,
+      endsAt: r.slots!.ends_at,
+    }));
 
   const criteria: Criterion[] = (rubric ?? []).map((c) => ({
     id: c.id,
@@ -87,6 +113,7 @@ export default async function ScorePage({
   return shell(
     <>
       {back}
+      <PhaseLine teams={stationTeams} serverNow={serverNow} />
       <h1 className="mt-4 text-3xl font-extrabold">{a.teams.name}</h1>
       <p className="text-lg">
         {slotRange(
