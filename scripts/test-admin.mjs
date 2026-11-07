@@ -248,6 +248,9 @@ async function run() {
           primary(meTeam) === "Your team" &&
           primary(meOrg) === "Organizer screens" &&
           meNobody.includes("not on a team or the judge list yet") &&
+          meNobody.includes(
+            "If nobody has checked your team in yet, check in here",
+          ) &&
           meNobody.includes("Look up a team by join code") &&
           home.status === 307 &&
           home.location?.endsWith("/me") &&
