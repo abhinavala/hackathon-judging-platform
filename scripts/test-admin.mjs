@@ -1723,6 +1723,15 @@ async function run() {
       headers: json ? { accept: "application/json" } : {},
     });
 
+  // "Before it opens" must not depend on today's date: the seed's window is
+  // the real Saturday, which is in the past once Saturday comes.
+  await db
+    .from("events")
+    .update({
+      checkin_opens_at: "2099-11-07T09:00:00-08:00",
+      checkin_closes_at: "2099-11-07T11:00:00-08:00",
+    })
+    .eq("id", ev.id);
   let ci = visible((await get("/checkin")).html);
   check(
     (await get("/checkin")).status === 200 &&
@@ -2738,6 +2747,35 @@ async function run() {
         flash(bad.url).includes("devpost.com link"),
       "devpost: a non-captain teammate sets the link after check-in; a non-Devpost link is refused",
       `${flash(r.url)} | ${flash(bad.url)}`,
+    );
+
+    // GitHub: pre-filled from check-in, and any member can change it.
+    const ghPage = (await get("/team", sam.cookie)).html;
+    const ghBefore =
+      /id="githubUrls"[^>]*value="([^"]*)"/.exec(ghPage)?.[1] ??
+      /value="([^"]*)"[^>]*id="githubUrls"/.exec(ghPage)?.[1];
+    r = await submit("/team", sam.cookie, 'name="githubUrls"', {
+      githubUrls: "github.com/owls/app, github.com/owls/api",
+    });
+    const { data: owlsGh } = await db
+      .from("teams")
+      .select("github_urls")
+      .eq("id", owls16.id)
+      .single();
+    const ghBad = await submit("/team", sam.cookie, 'name="githubUrls"', {
+      githubUrls: "https://gitlab.com/owls/app",
+    });
+    check(
+      ghBefore === "https://github.com/owls/app" &&
+        flash(r.url) === "Saved 2 repositories." &&
+        JSON.stringify(owlsGh.github_urls) ===
+          JSON.stringify([
+            "https://github.com/owls/app",
+            "https://github.com/owls/api",
+          ]) &&
+        flash(ghBad.url).includes("github.com/owner/repo"),
+      "github: the team page shows what check-in collected; a non-captain teammate changes it; a non-GitHub link is refused",
+      `${ghBefore} | ${flash(r.url)} | ${JSON.stringify(owlsGh?.github_urls)} | ${flash(ghBad.url)}`,
     );
   }
 
