@@ -939,5 +939,49 @@ begin
     '0015: another team, an anonymous visitor, or a non-Devpost link can''t set it');
 end $$;
 
+-- ---- 0016: GitHub repositories, any member ----------------------------------
+do $$
+declare
+  ok boolean; n int; m int;
+  alpha constant uuid := 'a0000000-0000-0000-0000-000000000001';
+  cap_b constant uuid := '22222222-2222-2222-2222-222222222222';
+  mate  constant uuid := '88888888-8888-8888-8888-888888888801';
+begin
+  perform become(mate);
+  perform public.set_team_github(alpha, array['https://github.com/acm/alpha']);
+  update public.teams set name = 'Renamed again' where id = alpha;
+  get diagnostics n = row_count;
+  reset role;
+  select count(*) into m from public.teams
+   where id = alpha and github_urls = array['https://github.com/acm/alpha'] and name = 'Team Alpha';
+  perform test_assert(m = 1 and n = 0,
+    '0016: a non-captain member can set the GitHub links, and still cannot rename the team');
+  perform become(cap_b);
+  begin
+    perform public.set_team_github(alpha, array['https://github.com/evil/x']);
+    ok := false;
+  exception when others then ok := true;
+  end;
+  reset role;
+  perform become(mate);
+  begin
+    perform public.set_team_github(alpha, array['https://gitlab.com/a/b']);
+    ok := false;
+  exception when others then ok := ok;
+  end;
+  reset role;
+  perform become_anon();
+  begin
+    perform public.set_team_github(alpha, array['https://github.com/anon/x']);
+    ok := false;
+  exception when others then ok := ok;
+  end;
+  reset role;
+  select count(*) into m from public.teams
+   where id = alpha and github_urls = array['https://github.com/acm/alpha'];
+  perform test_assert(ok and m = 1,
+    '0016: another team, an anonymous visitor, or a non-GitHub link can''t set them');
+end $$;
+
 \echo ''
 \echo '================= ALL PHASE 1 ACCEPTANCE TESTS PASSED ================='

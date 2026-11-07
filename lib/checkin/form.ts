@@ -116,24 +116,9 @@ export function parseCheckIn(
   if (!devpost.ok) errors.devpostUrl = devpost.error;
   const devpostUrl = devpost.ok ? devpost.value : null;
 
-  const githubRaw = one(f, "githubUrls");
-  const githubUrls: string[] = [];
-  if (githubRaw) {
-    const parts = githubRaw.split(/[\s,]+/).filter(Boolean);
-    const bad = parts.filter((p) => {
-      const u = url(p);
-      return (
-        !u ||
-        u.hostname !== "github.com" ||
-        u.pathname.split("/").filter(Boolean).length < 2
-      );
-    });
-    if (bad.length)
-      errors.githubUrls = `Use github.com/owner/repo links (not: ${bad.slice(0, 2).join(", ")}).`;
-    else if (parts.length > MAX_GITHUB)
-      errors.githubUrls = `At most ${MAX_GITHUB} repositories.`;
-    else githubUrls.push(...parts.map((p) => url(p)!.toString()));
-  }
+  const github = parseGithubUrls(one(f, "githubUrls"));
+  if (!github.ok) errors.githubUrls = github.error;
+  const githubUrls = github.ok ? github.value : [];
 
   const picked = [f.track ?? []].flat();
   const known = new Set(tracks.map((t) => t.id));
@@ -174,6 +159,35 @@ export function parseCheckIn(
       notes: notes || null,
     },
   };
+}
+
+/**
+ * Public GitHub repositories, separated by commas or spaces: github.com/
+ * owner/repo links, at most five, or blank for none. Check-in and the team
+ * page share it.
+ */
+export function parseGithubUrls(
+  raw: string,
+): { ok: true; value: string[] } | { ok: false; error: string } {
+  const v = raw.trim();
+  if (!v) return { ok: true, value: [] };
+  const parts = v.split(/[\s,]+/).filter(Boolean);
+  const bad = parts.filter((p) => {
+    const u = url(p);
+    return (
+      !u ||
+      u.hostname !== "github.com" ||
+      u.pathname.split("/").filter(Boolean).length < 2
+    );
+  });
+  if (bad.length)
+    return {
+      ok: false,
+      error: `Use github.com/owner/repo links (not: ${bad.slice(0, 2).join(", ")}).`,
+    };
+  if (parts.length > MAX_GITHUB)
+    return { ok: false, error: `At most ${MAX_GITHUB} repositories.` };
+  return { ok: true, value: parts.map((p) => url(p)!.toString()) };
 }
 
 /** A devpost.com link, or blank for none. Check-in and the team page share it. */

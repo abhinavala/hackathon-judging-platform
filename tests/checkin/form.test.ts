@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseCheckIn, fieldsFromFormData } from "../../lib/checkin/form.ts";
+import {
+  parseCheckIn,
+  parseGithubUrls,
+  fieldsFromFormData,
+} from "../../lib/checkin/form.ts";
 
 const TRACKS = [
   { id: "t-aws", name: "Best Use of AWS" },
@@ -128,4 +132,20 @@ test("FormData: tracks are always a list, other fields single", () => {
   const f = fieldsFromFormData(fd);
   assert.deepEqual(f.track, ["t-aws"]);
   assert.equal(f.teamName, "X");
+});
+
+test("parseGithubUrls: the rules check-in and the team page share", () => {
+  assert.deepEqual(parseGithubUrls(""), { ok: true, value: [] });
+  assert.deepEqual(parseGithubUrls("github.com/a/b, https://github.com/c/d"), {
+    ok: true,
+    value: ["https://github.com/a/b", "https://github.com/c/d"],
+  });
+  const bad = parseGithubUrls("https://gitlab.com/a/b");
+  assert.equal(bad.ok, false);
+  assert.match(!bad.ok ? bad.error : "", /github\.com\/owner\/repo/);
+  const six = parseGithubUrls(
+    Array.from({ length: 6 }, (_, i) => `github.com/o/r${i}`).join(","),
+  );
+  assert.equal(six.ok, false);
+  assert.match(!six.ok ? six.error : "", /At most 5/);
 });

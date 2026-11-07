@@ -2739,6 +2739,35 @@ async function run() {
       "devpost: a non-captain teammate sets the link after check-in; a non-Devpost link is refused",
       `${flash(r.url)} | ${flash(bad.url)}`,
     );
+
+    // GitHub: pre-filled from check-in, and any member can change it.
+    const ghPage = (await get("/team", sam.cookie)).html;
+    const ghBefore =
+      /id="githubUrls"[^>]*value="([^"]*)"/.exec(ghPage)?.[1] ??
+      /value="([^"]*)"[^>]*id="githubUrls"/.exec(ghPage)?.[1];
+    r = await submit("/team", sam.cookie, 'name="githubUrls"', {
+      githubUrls: "github.com/owls/app, github.com/owls/api",
+    });
+    const { data: owlsGh } = await db
+      .from("teams")
+      .select("github_urls")
+      .eq("id", owls16.id)
+      .single();
+    const ghBad = await submit("/team", sam.cookie, 'name="githubUrls"', {
+      githubUrls: "https://gitlab.com/owls/app",
+    });
+    check(
+      ghBefore === "https://github.com/owls/app" &&
+        flash(r.url) === "Saved 2 repositories." &&
+        JSON.stringify(owlsGh.github_urls) ===
+          JSON.stringify([
+            "https://github.com/owls/app",
+            "https://github.com/owls/api",
+          ]) &&
+        flash(ghBad.url).includes("github.com/owner/repo"),
+      "github: the team page shows what check-in collected; a non-captain teammate changes it; a non-GitHub link is refused",
+      `${ghBefore} | ${flash(r.url)} | ${JSON.stringify(owlsGh?.github_urls)} | ${flash(ghBad.url)}`,
+    );
   }
 
   {

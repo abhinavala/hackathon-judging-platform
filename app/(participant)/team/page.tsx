@@ -12,7 +12,7 @@ import {
   WORKSHOP_JOIN_URL,
 } from "@/lib/team/codes";
 import { clockWithZone, dayLabel, slotRange } from "@/lib/team/view";
-import { saveDevpost } from "./actions";
+import { saveDevpost, saveGithub } from "./actions";
 import NotOnATeamPage from "./none/page";
 
 export const instant = false;
@@ -36,17 +36,33 @@ export default async function TeamPage({ searchParams }: PageProps<"/team">) {
   const [team, codesRes, teamRow] = await Promise.all([
     loadMyTeam(ctx.teamId, ctx.user.id),
     db.rpc("my_access_codes"),
-    db.from("teams").select("devpost_url").eq("id", ctx.teamId).maybeSingle(),
+    db
+      .from("teams")
+      .select("devpost_url, github_urls")
+      .eq("id", ctx.teamId)
+      .maybeSingle(),
   ]);
   if (!team) return <NotOnATeamPage />;
   const loaded = await loadTeamView(team.joinCode).catch(() => null);
   const view = loaded?.view.found ? loaded.view : null;
   const codes = codesFromRpc(codesRes.data);
   const devpost = teamRow.data?.devpost_url ?? null;
+  const github = teamRow.data?.github_urls ?? [];
   const tz = view?.event.timezone ?? "America/Los_Angeles";
   const help = helpPlace(view?.event.helpLocation);
+  // Which section the last save message belongs to.
+  const savedIn = params.section === "github" ? "github" : "devpost";
   const ok = typeof params.ok === "string" ? params.ok : null;
   const error = typeof params.error === "string" ? params.error : null;
+  const flash = (here: "devpost" | "github") =>
+    (ok || error) && savedIn === here ? (
+      <p
+        role={error ? "alert" : "status"}
+        className={`mb-3 rounded border-2 p-3 ${error ? "border-red-700" : "border-green-700"}`}
+      >
+        {error ?? ok}
+      </p>
+    ) : null;
 
   return (
     <main className="mx-auto w-full max-w-lg p-5">
@@ -183,14 +199,7 @@ export default async function TeamPage({ searchParams }: PageProps<"/team">) {
         <h2 id="devpost-h" className={h2}>
           Devpost
         </h2>
-        {(ok || error) && (
-          <p
-            role={error ? "alert" : "status"}
-            className={`mb-3 rounded border-2 p-3 ${error ? "border-red-700" : "border-green-700"}`}
-          >
-            {error ?? ok}
-          </p>
-        )}
+        {flash("devpost")}
         <p className="mb-2">
           {devpost ? (
             <>
@@ -219,6 +228,46 @@ export default async function TeamPage({ searchParams }: PageProps<"/team">) {
             inputMode="url"
             defaultValue={devpost ?? ""}
             placeholder="https://devpost.com/software/…"
+            className={input}
+          />
+          <button className={button}>Save</button>
+        </form>
+      </section>
+
+      <section id="github" className={section} aria-labelledby="github-h">
+        <h2 id="github-h" className={h2}>
+          GitHub
+        </h2>
+        {flash("github")}
+        {github.length > 0 ? (
+          <ul className="mb-2 list-disc pl-5" data-testid="github-current">
+            {github.map((u) => (
+              <li key={u}>
+                <a href={u} className="underline break-all">
+                  {u}
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mb-2">
+            <strong>No GitHub repositories yet.</strong>
+          </p>
+        )}
+        <p className="mb-2 text-sm">
+          Anyone on the team can add or change these. Public repositories only;
+          up to 5.
+        </p>
+        <form action={saveGithub} className="space-y-2">
+          <label className="block text-sm font-medium" htmlFor="githubUrls">
+            github.com/owner/repo links, separated by commas
+          </label>
+          <input
+            id="githubUrls"
+            name="githubUrls"
+            inputMode="url"
+            defaultValue={github.join(", ")}
+            placeholder="https://github.com/you/project"
             className={input}
           />
           <button className={button}>Save</button>

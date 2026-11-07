@@ -512,6 +512,9 @@ isOneToOne: false
 "set_team_devpost":
 { Args: { "p_team": string,"p_url": string }; Returns: undefined
                            },
+"set_team_github":
+{ Args: { "p_team": string,"p_urls": (string)[] }; Returns: undefined
+                           },
 "team_schedule_by_code":
 { Args: { "p_code": string }; Returns: {
               "ends_at": string,"location_text": string,"panel_label": string,"slot_index": number,"starts_at": string,"team_name": string,"track_names": (string)[]
