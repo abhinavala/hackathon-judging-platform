@@ -1723,6 +1723,15 @@ async function run() {
       headers: json ? { accept: "application/json" } : {},
     });
 
+  // "Before it opens" must not depend on today's date: the seed's window is
+  // the real Saturday, which is in the past once Saturday comes.
+  await db
+    .from("events")
+    .update({
+      checkin_opens_at: "2099-11-07T09:00:00-08:00",
+      checkin_closes_at: "2099-11-07T11:00:00-08:00",
+    })
+    .eq("id", ev.id);
   let ci = visible((await get("/checkin")).html);
   check(
     (await get("/checkin")).status === 200 &&
