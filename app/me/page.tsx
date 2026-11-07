@@ -75,10 +75,18 @@ export default async function MePage() {
           <p className="mb-2 font-semibold">
             You&apos;re not on a team or the judge list yet.
           </p>
+          <p className="mb-2">
+            If nobody has checked your team in yet,{" "}
+            <Link href="/checkin" className="font-semibold underline">
+              check in here
+            </Link>
+            .
+          </p>
           <p>
-            If you should be, ask your captain to add this address, or find an
-            organizer at {helpPlace(event?.helpLocation)}. Judges: the address
-            you sign in with has to be the one the organizers have for you.
+            If your team has checked in, ask your captain to add this address,
+            or find an organizer at {helpPlace(event?.helpLocation)}. Judges:
+            the address you sign in with has to be the one the organizers have
+            for you.
           </p>
         </div>
       )}
