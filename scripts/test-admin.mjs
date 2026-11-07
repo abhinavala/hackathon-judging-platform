@@ -2741,6 +2741,15 @@ async function run() {
     );
   }
 
+  {
+    const station = text((await get("/judge", judgeUser.cookie)).html);
+    check(
+      /\b\d+ of \d+ scored\b/.test(station),
+      "judge view: the station header counts how many of the judge's teams they've scored",
+      station.slice(0, 200),
+    );
+  }
+
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 }
 

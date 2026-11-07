@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { stationRows, type StationTeam } from "@/lib/judge/station";
 import { slotRange } from "@/lib/team/view";
-import { minSec, phaseAt } from "@/lib/event/phases";
+import { PhaseLine } from "./phase-line";
 
 const TICK_MS = 15_000;
 const REFRESH_MS = 30_000;
@@ -50,6 +50,7 @@ export function StationView({
         <section key={s.label} className="mb-8">
           <h1 className="text-3xl font-extrabold">{s.label}</h1>
           {s.location && <p className="text-xl font-semibold">{s.location}</p>}
+          <ScoredCount teams={s.teams} />
           <PhaseLine teams={s.teams} serverNow={serverNow} />
           <ol className="mt-4 space-y-2">
             {stationRows(s.teams, now).map((r) => (
@@ -111,63 +112,14 @@ export function StationView({
   );
 }
 
-/**
- * Where this station is within the current slot, to the second: presenting,
- * questions, or switching over. Its own one-second clock, separate from the
- * 15 s re-mark and the 30 s refresh above, which it doesn't touch; it reads
- * the same teams and corrects for the phone's clock the same way.
- */
-function PhaseLine({
-  teams,
-  serverNow,
-}: {
-  teams: StationTeam[];
-  serverNow: number;
-}) {
-  const [now, setNow] = useState(serverNow);
-  useEffect(() => {
-    const offset = serverNow - Date.now();
-    const tick = setInterval(() => setNow(Date.now() + offset), 1000);
-    return () => clearInterval(tick);
-  }, [serverNow]);
-  const sorted = [...teams].sort(
-    (a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt),
-  );
-  const i = sorted.findIndex(
-    (t) => now >= Date.parse(t.startsAt) && now < Date.parse(t.endsAt),
-  );
-  const upcoming = sorted.find((t) => Date.parse(t.startsAt) > now);
-  if (i < 0) {
-    // Judging hasn't reached this station yet, or an empty seat this slot.
-    if (!upcoming || Date.parse(upcoming.startsAt) - now > 30 * 60_000)
-      return null;
-    return (
-      <p
-        className="mt-3 rounded-lg bg-gray-100 px-3 py-2 text-lg font-bold tabular-nums text-gray-900"
-        suppressHydrationWarning
-      >
-        Next team in {minSec((Date.parse(upcoming.startsAt) - now) / 1000)}
-      </p>
-    );
-  }
-  const phase = phaseAt(
-    sorted[i].startsAt,
-    sorted[i].endsAt,
-    now,
-    i + 1 < sorted.length,
-  );
-  if (!phase) return null;
+/** "2 of 15 scored": a judge's own progress, so a skipped team stands out. */
+function ScoredCount({ teams }: { teams: StationTeam[] }) {
+  const done = teams.filter((t) => t.scored === "complete").length;
+  const partly = teams.filter((t) => t.scored === "partial").length;
   return (
-    <p
-      role="status"
-      className={`mt-3 rounded-lg px-3 py-2 text-xl font-extrabold tabular-nums ${
-        phase.kind === "switch"
-          ? "bg-amber-400 text-black"
-          : "bg-green-700 text-white"
-      }`}
-      suppressHydrationWarning
-    >
-      {phase.text}
+    <p className="text-base font-semibold" data-testid="scored-count">
+      {done} of {teams.length} scored
+      {partly ? ` · ${partly} partly` : ""}
     </p>
   );
 }
