@@ -995,6 +995,19 @@ async function run() {
     );
   }
 
+  {
+    const overview = (await get("/organizer", org.cookie)).html;
+    const eventPage = text((await get("/organizer/event", org.cookie)).html);
+    check(
+      /href="\/board\/aws-a10-2026"[^>]*target="_blank"/.test(overview) &&
+        eventPage.includes(
+          "presenting 4 min, questions 1 min, switch over 2 min",
+        ) &&
+        eventPage.includes("Switch over · 1:30 until next teams"),
+      "organizer nav links the board; the Event page shows the slot's phases (4 / 1 / 2) and what the board will say",
+    );
+  }
+
   // Deleting a track teams selected asks first, then removes the selections.
   const { data: gameTrack } = await db
     .from("tracks")
