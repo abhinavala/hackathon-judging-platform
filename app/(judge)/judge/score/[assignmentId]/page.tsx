@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { slotRange } from "@/lib/team/view";
 import type { Criterion, ScoreDraft } from "@/lib/judge/score-draft";
 import type { StationTeam } from "@/lib/judge/station";
+import { trackBadges } from "@/lib/event/track-badge";
 import { PhaseLine } from "../../phase-line";
 import { ScoreForm } from "./score-form";
 
@@ -38,7 +39,7 @@ export default async function ScorePage({
   const { data: a } = await db
     .from("assignments")
     .select(
-      "id, status, schedule_id, panel_id, teams(name, devpost_url, team_tracks(tracks(name, sort_order))), slots(starts_at, ends_at), schedules(status, event_id)",
+      "id, status, schedule_id, panel_id, teams(name, devpost_url, team_tracks(tracks(name, sponsor, sort_order))), slots(starts_at, ends_at), schedules(status, event_id)",
     )
     .eq("id", assignmentId)
     .maybeSingle();
@@ -92,11 +93,19 @@ export default async function ScorePage({
       endsAt: r.slots!.ends_at,
     }));
 
-  const tracks = (a.teams.team_tracks ?? [])
-    .map((x) => x.tracks)
-    .filter((t): t is { name: string; sort_order: number } => !!t)
-    .sort((x, y) => x.sort_order - y.sort_order)
-    .map((t) => t.name);
+  const tracks = trackBadges(
+    (a.teams.team_tracks ?? []).flatMap((x) =>
+      x.tracks
+        ? [
+            {
+              name: x.tracks.name,
+              sponsor: x.tracks.sponsor,
+              sortOrder: x.tracks.sort_order,
+            },
+          ]
+        : [],
+    ),
+  );
   const criteria: Criterion[] = (rubric ?? []).map((c) => ({
     id: c.id,
     label: c.label,
