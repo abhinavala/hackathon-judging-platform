@@ -26,7 +26,7 @@ export type ScoringData = {
   }[];
   stations: { id: string; label: string }[];
   seats: { stationId: string; judgeId: string }[];
-  judges: { id: string; name: string }[];
+  judges: { id: string; name: string; affiliation: string | null }[];
   scores: {
     id: string;
     assignmentId: string;
@@ -68,7 +68,10 @@ export async function loadScoring(
         .order("sort_order"),
       db.from("panels").select("id, label").eq("event_id", eventId),
       db.from("panel_judges").select("panel_id, judge_id"),
-      db.from("judges").select("id, full_name").eq("event_id", eventId),
+      db
+        .from("judges")
+        .select("id, full_name, affiliation")
+        .eq("event_id", eventId),
     ]);
   const pub = must(published, "schedules");
   const base = {
@@ -88,6 +91,7 @@ export async function loadScoring(
     judges: must(judges, "judges").map((j) => ({
       id: j.id,
       name: j.full_name,
+      affiliation: j.affiliation,
     })),
   };
   if (!pub) return { ...base, assignments: [], teams: [], scores: [] };

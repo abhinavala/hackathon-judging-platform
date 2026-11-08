@@ -8,7 +8,41 @@ export type ScoreRow = {
   judgeId: string;
   notes: string;
   items: { criterionId: string; value: number }[];
+  /** Extra CSV cells for this score, after the standard ones (exportRows). */
+  extra?: string[];
 };
+
+/** "Marcus Chen (AWS)", or just the name for an unaffiliated judge. */
+export function judgeLabel(name: string, affiliation: string | null): string {
+  const a = affiliation?.trim();
+  return a ? `${name} (${a})` : name;
+}
+
+export type JudgeLine = {
+  judgeId: string;
+  total: number;
+  /** How many criteria this score has a value for. */
+  filled: number;
+  complete: boolean;
+};
+
+/** Every judge who has a score for this team, complete or not. */
+export function byJudge(
+  teamId: string,
+  scores: ScoreRow[],
+  criteria: Criterion[],
+): JudgeLine[] {
+  return scores
+    .filter((s) => s.teamId === teamId)
+    .map((s) => ({
+      judgeId: s.judgeId,
+      total: total(s),
+      filled: criteria.filter((c) =>
+        s.items.some((i) => i.criterionId === c.id),
+      ).length,
+      complete: complete(s, criteria),
+    }));
+}
 
 export type Ranked = {
   teamId: string;
@@ -88,6 +122,8 @@ export function exportRows(
   scores: ScoreRow[],
   criteria: Criterion[],
   name: { team: (id: string) => string; judge: (id: string) => string },
+  /** Columns appended after the standard seven, which never change. */
+  extraHeader: string[] = [],
 ): string[][] {
   const header = [
     "Team",
@@ -98,7 +134,7 @@ export function exportRows(
     "Complete",
     "Notes",
   ];
-  const out: string[][] = [header];
+  const out: string[][] = [[...header, ...extraHeader]];
   const sorted = [...scores].sort(
     (a, b) =>
       name.team(a.teamId).localeCompare(name.team(b.teamId)) ||
@@ -115,6 +151,7 @@ export function exportRows(
         String(total(s)),
         complete(s, criteria) ? "yes" : "no",
         s.notes,
+        ...extraHeader.map((_, i) => s.extra?.[i] ?? ""),
       ]);
     }
   return out;
