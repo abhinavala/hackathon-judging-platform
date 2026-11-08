@@ -2406,6 +2406,24 @@ async function run() {
       "scoring: a judge saves their own team's score on the 4-criterion rubric; another station is refused; a participant can't reach it",
       `${ok.status} ${refused.status} ${asParticipant.status} ${rubric.length}`,
     );
+    {
+      const { data: tt } = await db
+        .from("assignments")
+        .select("teams(team_tracks(tracks(name)))")
+        .eq("id", mine.id)
+        .single();
+      const names = (tt.teams.team_tracks ?? []).map((x) => x.tracks.name);
+      const badges = text(
+        /data-testid="team-tracks"[\s\S]*?<\/ul>/.exec(page.html)?.[0] ?? "",
+      );
+      check(
+        names.length
+          ? names.every((n) => badges.includes(n))
+          : badges.includes("No sponsor track entered"),
+        "scoring: the score page shows the tracks the team entered",
+        `${JSON.stringify(names)} | ${badges}`,
+      );
+    }
     // The organizer's completion view counts it, and lists the team as
     // still waiting on its other judges.
     {

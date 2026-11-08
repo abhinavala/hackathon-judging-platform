@@ -38,7 +38,7 @@ export default async function ScorePage({
   const { data: a } = await db
     .from("assignments")
     .select(
-      "id, status, schedule_id, panel_id, teams(name, devpost_url), slots(starts_at, ends_at), schedules(status, event_id)",
+      "id, status, schedule_id, panel_id, teams(name, devpost_url, team_tracks(tracks(name, sort_order))), slots(starts_at, ends_at), schedules(status, event_id)",
     )
     .eq("id", assignmentId)
     .maybeSingle();
@@ -92,6 +92,11 @@ export default async function ScorePage({
       endsAt: r.slots!.ends_at,
     }));
 
+  const tracks = (a.teams.team_tracks ?? [])
+    .map((x) => x.tracks)
+    .filter((t): t is { name: string; sort_order: number } => !!t)
+    .sort((x, y) => x.sort_order - y.sort_order)
+    .map((t) => t.name);
   const criteria: Criterion[] = (rubric ?? []).map((c) => ({
     id: c.id,
     label: c.label,
@@ -115,6 +120,22 @@ export default async function ScorePage({
       {back}
       <PhaseLine teams={stationTeams} serverNow={serverNow} />
       <h1 className="mt-4 text-3xl font-extrabold">{a.teams.name}</h1>
+      {/* The tracks this team entered: what "Sponsor alignment" is scored
+          against. Read as the judge (team_tracks_read covers teams they judge). */}
+      <ul className="mt-2 flex flex-wrap gap-2" data-testid="team-tracks">
+        {tracks.length > 0 ? (
+          tracks.map((t) => (
+            <li
+              key={t}
+              className="rounded-full border-2 border-sky-700 bg-sky-50 px-3 py-1 text-sm font-semibold text-sky-900 dark:border-sky-400 dark:bg-sky-950 dark:text-sky-100"
+            >
+              {t}
+            </li>
+          ))
+        ) : (
+          <li className="text-sm font-semibold">No sponsor track entered</li>
+        )}
+      </ul>
       <p className="text-lg">
         {slotRange(
           { startsAt: a.slots.starts_at, endsAt: a.slots.ends_at },
