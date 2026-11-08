@@ -1091,9 +1091,18 @@ async function run() {
     tvPage.status === 200 && tvText.includes("ShelterLink"),
     "team view: renders for an anonymous visitor (no sign-in)",
   );
+  // The fixture's judging is the real Sunday, so whether the page is "far
+  // ahead" (the day) or counting down depends on today's date: check the form
+  // that's right for now.
+  const farAhead =
+    Date.parse("2026-11-08T10:00:00-08:00") - Date.now() > 12 * 3600_000;
   check(
-    /Sunday, November 8/.test(tvText) && /PST/.test(tvText),
-    "team view: far ahead it shows the day, with times labelled PST",
+    (farAhead
+      ? /Sunday, November 8/.test(tvText)
+      : /presentation is in/.test(tvText)) && /PST/.test(tvText),
+    farAhead
+      ? "team view: far ahead it shows the day, with times labelled PST"
+      : "team view: within 12 hours it counts down, with times labelled PST",
   );
   check(
     tvText.includes("Schedule v3"),
@@ -1486,8 +1495,8 @@ async function run() {
     flash(r.url),
   );
   check(
-    visible((await get("/t/LATE-0001")).html).includes(
-      "Your first presentation is on",
+    /Your first presentation is (on|in)/.test(
+      visible((await get("/t/LATE-0001")).html),
     ),
     "late team: its team page now shows its times",
   );
@@ -2406,6 +2415,24 @@ async function run() {
       "scoring: a judge saves their own team's score on the 4-criterion rubric; another station is refused; a participant can't reach it",
       `${ok.status} ${refused.status} ${asParticipant.status} ${rubric.length}`,
     );
+    {
+      const { data: tt } = await db
+        .from("assignments")
+        .select("teams(team_tracks(tracks(name)))")
+        .eq("id", mine.id)
+        .single();
+      const names = (tt.teams.team_tracks ?? []).map((x) => x.tracks.name);
+      const badges = text(
+        /data-testid="team-tracks"[\s\S]*?<\/ul>/.exec(page.html)?.[0] ?? "",
+      );
+      check(
+        names.length
+          ? names.every((n) => badges.includes(n))
+          : badges.includes("No sponsor track entered"),
+        "scoring: the score page shows the tracks the team entered",
+        `${JSON.stringify(names)} | ${badges}`,
+      );
+    }
     // The organizer's completion view counts it, and lists the team as
     // still waiting on its other judges.
     {
