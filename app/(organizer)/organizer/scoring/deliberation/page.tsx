@@ -181,12 +181,25 @@ export default async function DeliberationPage({
                           <ul className="mt-1 space-y-0.5 text-xs">
                             {lines.map((l) => (
                               <li key={l.judgeId}>
-                                {l.who}
-                                {l.at ? ` · ${l.at}` : ""} ·{" "}
-                                <strong>{l.total}</strong>
-                                {l.complete
-                                  ? ""
-                                  : ` (${l.filled} of ${data.criteria.length})`}
+                                {/* Breaks only between the pieces, never inside one. */}
+                                <span className="whitespace-nowrap">
+                                  {l.who}
+                                </span>
+                                {l.at && (
+                                  <>
+                                    {" · "}
+                                    <span className="whitespace-nowrap">
+                                      {l.at}
+                                    </span>
+                                  </>
+                                )}
+                                {" · "}
+                                <span className="whitespace-nowrap">
+                                  <strong>{l.total}</strong>
+                                  {l.complete
+                                    ? ""
+                                    : ` (${l.filled} of ${data.criteria.length})`}
+                                </span>
                               </li>
                             ))}
                           </ul>
