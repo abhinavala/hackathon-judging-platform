@@ -17,6 +17,8 @@ export async function GET() {
   const assignment = new Map(data.assignments.map((a) => [a.id, a]));
   const teamName = new Map(data.teams.map((t) => [t.id, t.name]));
   const judgeName = new Map(data.judges.map((j) => [j.id, j.name]));
+  const affiliation = new Map(data.judges.map((j) => [j.id, j.affiliation]));
+  const station = new Map(data.stations.map((s) => [s.id, s.label]));
   const rows = exportRows(
     data.scores
       .filter((s) => assignment.has(s.assignmentId))
@@ -25,12 +27,18 @@ export async function GET() {
         judgeId: s.judgeId,
         notes: s.notes,
         items: s.items,
+        extra: [
+          affiliation.get(s.judgeId) ?? "",
+          station.get(assignment.get(s.assignmentId)!.stationId) ?? "",
+        ],
       })),
     data.criteria,
     {
       team: (id) => teamName.get(id) ?? "?",
       judge: (id) => judgeName.get(id) ?? "?",
     },
+    // New columns go after the existing seven, which are unchanged.
+    ["Judge affiliation", "Station"],
   );
   return new Response(formatCsv(rows.map((r) => r.map(spreadsheetSafe))), {
     headers: {

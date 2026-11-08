@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { exportRows, rank } from "../../lib/admin/deliberation.ts";
+import {
+  exportRows,
+  rank,
+  judgeLabel,
+  byJudge,
+} from "../../lib/admin/deliberation.ts";
 
 const C = ["a", "b", "c", "d"].map((id) => ({ id, label: id.toUpperCase() }));
 const s = (teamId: string, judgeId: string, vals: number[], notes = "") => ({
@@ -82,4 +87,82 @@ test("export: one row per team per judge per criterion, with totals and complete
     ["4", "4", "4", ""],
   );
   assert.ok(partial.every((r) => r[5] === "no"));
+});
+
+test("judgeLabel names the affiliation, or just the name when there is none", () => {
+  assert.equal(judgeLabel("Marcus Chen", "AWS"), "Marcus Chen (AWS)");
+  assert.equal(judgeLabel("Grace Liu", null), "Grace Liu");
+  assert.equal(judgeLabel("Grace Liu", "  "), "Grace Liu");
+});
+
+test("byJudge lists every judge with a score, and marks the incomplete ones", () => {
+  const crit = [
+    { id: "c1", label: "A" },
+    { id: "c2", label: "B" },
+    { id: "c3", label: "C" },
+  ];
+  const lines = byJudge(
+    "t1",
+    [
+      {
+        teamId: "t1",
+        judgeId: "j1",
+        notes: "",
+        items: [
+          { criterionId: "c1", value: 4 },
+          { criterionId: "c2", value: 5 },
+          { criterionId: "c3", value: 3 },
+        ],
+      },
+      {
+        teamId: "t1",
+        judgeId: "j2",
+        notes: "",
+        items: [
+          { criterionId: "c1", value: 2 },
+          { criterionId: "c2", value: 2 },
+        ],
+      },
+      { teamId: "t2", judgeId: "j1", notes: "", items: [] },
+    ],
+    crit,
+  );
+  assert.deepEqual(lines, [
+    { judgeId: "j1", total: 12, filled: 3, complete: true },
+    { judgeId: "j2", total: 4, filled: 2, complete: false },
+  ]);
+});
+
+test("exportRows: extra columns go after the standard seven, which are unchanged", () => {
+  const crit = [{ id: "c1", label: "Impact" }];
+  const name = { team: () => "T", judge: () => "J" };
+  const plain = exportRows(
+    [
+      {
+        teamId: "t",
+        judgeId: "j",
+        notes: "n",
+        items: [{ criterionId: "c1", value: 3 }],
+      },
+    ],
+    crit,
+    name,
+  );
+  const extra = exportRows(
+    [
+      {
+        teamId: "t",
+        judgeId: "j",
+        notes: "n",
+        items: [{ criterionId: "c1", value: 3 }],
+        extra: ["AWS", "Station 3"],
+      },
+    ],
+    crit,
+    name,
+    ["Judge affiliation", "Station"],
+  );
+  assert.deepEqual(extra[0].slice(0, 7), plain[0]);
+  assert.deepEqual(extra[0].slice(7), ["Judge affiliation", "Station"]);
+  assert.deepEqual(extra[1], [...plain[1], "AWS", "Station 3"]);
 });

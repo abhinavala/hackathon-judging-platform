@@ -2834,6 +2834,17 @@ async function run() {
     );
   }
 
+  {
+    const csv = (await get("/organizer/scoring/export", org.cookie)).html;
+    const header = csv.split(/\r?\n/)[0];
+    check(
+      header ===
+        "Team,Judge,Criterion,Value,Judge's total,Complete,Notes,Judge affiliation,Station",
+      "scoring CSV: the seven original columns unchanged and in order, then judge affiliation and station",
+      header,
+    );
+  }
+
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 }
 

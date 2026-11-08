@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { adminDb, currentEvent } from "@/lib/admin/data";
 import { loadScoring } from "@/lib/admin/scoring";
-import { rank } from "@/lib/admin/deliberation";
+import { byJudge, judgeLabel, rank } from "@/lib/admin/deliberation";
 import { Section, table } from "../../_ui/ui";
 
 // Reads the organizer's session; blocks on the server rather than
@@ -32,24 +32,31 @@ export default async function DeliberationPage({
     return <p>Nothing is published yet, so there&apos;s nothing to rank.</p>;
 
   const assignment = new Map(data.assignments.map((a) => [a.id, a]));
-  const judgeName = new Map(data.judges.map((j) => [j.id, j.name]));
+  const judgeName = new Map(
+    data.judges.map((j) => [j.id, judgeLabel(j.name, j.affiliation)]),
+  );
+  const stationLabel = new Map(data.stations.map((s) => [s.id, s.label]));
+  // Which station each judge scored a team at, for the breakdown.
+  const stationOf = new Map(
+    data.scores.map((s) => [
+      `${s.judgeId}|${assignment.get(s.assignmentId)?.teamId}`,
+      stationLabel.get(assignment.get(s.assignmentId)?.stationId ?? "") ?? "",
+    ]),
+  );
   const team = new Map(data.teams.map((t) => [t.id, t]));
   const tracks = [...new Set(data.teams.flatMap((t) => t.tracks))].sort();
   const teamIds = data.teams
     .filter((t) => !track || t.tracks.includes(track))
     .map((t) => t.id);
-  const ranked = rank(
-    teamIds,
-    data.scores
-      .filter((s) => assignment.has(s.assignmentId))
-      .map((s) => ({
-        teamId: assignment.get(s.assignmentId)!.teamId,
-        judgeId: s.judgeId,
-        notes: s.notes,
-        items: s.items,
-      })),
-    data.criteria,
-  );
+  const scoreRows = data.scores
+    .filter((s) => assignment.has(s.assignmentId))
+    .map((s) => ({
+      teamId: assignment.get(s.assignmentId)!.teamId,
+      judgeId: s.judgeId,
+      notes: s.notes,
+      items: s.items,
+    }));
+  const ranked = rank(teamIds, scoreRows, data.criteria);
   const max = data.criteria.length * 5;
 
   return (
@@ -153,6 +160,52 @@ export default async function DeliberationPage({
                         )}
                       </div>
                     )}
+                    {(() => {
+                      const lines = byJudge(r.teamId, scoreRows, data.criteria)
+                        .map((l) => ({
+                          ...l,
+                          who: judgeName.get(l.judgeId) ?? "?",
+                          at: stationOf.get(`${l.judgeId}|${r.teamId}`) ?? "",
+                        }))
+                        .sort(
+                          (a, b) =>
+                            a.at.localeCompare(b.at, undefined, {
+                              numeric: true,
+                            }) || a.who.localeCompare(b.who),
+                        );
+                      return lines.length === 0 ? null : (
+                        <details className="mt-1" data-testid="by-judge">
+                          <summary className="cursor-pointer text-xs underline">
+                            By judge ({lines.length})
+                          </summary>
+                          <ul className="mt-1 space-y-0.5 text-xs">
+                            {lines.map((l) => (
+                              <li key={l.judgeId}>
+                                {/* Breaks only between the pieces, never inside one. */}
+                                <span className="whitespace-nowrap">
+                                  {l.who}
+                                </span>
+                                {l.at && (
+                                  <>
+                                    {" · "}
+                                    <span className="whitespace-nowrap">
+                                      {l.at}
+                                    </span>
+                                  </>
+                                )}
+                                {" · "}
+                                <span className="whitespace-nowrap">
+                                  <strong>{l.total}</strong>
+                                  {l.complete
+                                    ? ""
+                                    : ` (${l.filled} of ${data.criteria.length})`}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      );
+                    })()}
                   </td>
                   <td>{r.mean ?? "no complete scores"}</td>
                   <td>{r.n}</td>
