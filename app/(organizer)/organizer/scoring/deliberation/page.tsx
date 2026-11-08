@@ -16,6 +16,14 @@ export default async function DeliberationPage({
 }: PageProps<"/organizer/scoring/deliberation">) {
   const params = await searchParams;
   const track = typeof params.track === "string" ? params.track : "";
+  const notesOpen = params.notes === "open";
+  const notesHref = (open: boolean) => {
+    const q = new URLSearchParams();
+    if (track) q.set("track", track);
+    if (open) q.set("notes", "open");
+    const qs = q.toString();
+    return `/organizer/scoring/deliberation${qs ? `?${qs}` : ""}`;
+  };
   const db = await adminDb();
   const event = await currentEvent(db);
   if (!event) return <p>No event exists yet.</p>;
@@ -90,7 +98,15 @@ export default async function DeliberationPage({
               <th>Mean</th>
               <th>Scores</th>
               <th>Normalised</th>
-              <th>Notes</th>
+              <th className="w-1/2">
+                Notes{" "}
+                <Link
+                  href={notesHref(!notesOpen)}
+                  className="ml-2 text-xs font-normal underline"
+                >
+                  {notesOpen ? "Collapse all" : "Expand all"}
+                </Link>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -119,9 +135,22 @@ export default async function DeliberationPage({
                     ) : (
                       <span className="text-xs"> · no Devpost link</span>
                     )}
-                    {t && t.tracks.length > 0 && (
-                      <div className="text-xs text-gray-600">
-                        {t.tracks.join(", ")}
+                    {t && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {t.badges.length > 0 ? (
+                          t.badges.map((b) => (
+                            <span
+                              key={b}
+                              className="rounded-full border border-sky-700 px-2 text-xs font-semibold text-sky-900 dark:border-sky-400 dark:text-sky-100"
+                            >
+                              {b}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-gray-600">
+                            no sponsor track
+                          </span>
+                        )}
                       </div>
                     )}
                   </td>
@@ -132,7 +161,7 @@ export default async function DeliberationPage({
                     {r.notes.length === 0 ? (
                       ""
                     ) : (
-                      <details>
+                      <details open={notesOpen}>
                         <summary className="cursor-pointer text-sm underline">
                           {r.notes.length} note{r.notes.length === 1 ? "" : "s"}
                         </summary>

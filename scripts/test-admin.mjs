@@ -2418,10 +2418,13 @@ async function run() {
     {
       const { data: tt } = await db
         .from("assignments")
-        .select("teams(team_tracks(tracks(name)))")
+        .select("teams(team_tracks(tracks(name, sponsor)))")
         .eq("id", mine.id)
         .single();
-      const names = (tt.teams.team_tracks ?? []).map((x) => x.tracks.name);
+      // Short badges: the sponsor, or the name when a track has none.
+      const names = (tt.teams.team_tracks ?? []).map(
+        (x) => x.tracks.sponsor || x.tracks.name,
+      );
       const badges = text(
         /data-testid="team-tracks"[\s\S]*?<\/ul>/.exec(page.html)?.[0] ?? "",
       );
@@ -2429,7 +2432,7 @@ async function run() {
         names.length
           ? names.every((n) => badges.includes(n))
           : badges.includes("No sponsor track entered"),
-        "scoring: the score page shows the tracks the team entered",
+        "scoring: the score page shows the team's tracks as short badges (sponsor)",
         `${JSON.stringify(names)} | ${badges}`,
       );
     }

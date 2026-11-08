@@ -1,4 +1,5 @@
 import "server-only";
+import { trackBadges } from "@/lib/event/track-badge";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 
@@ -20,6 +21,8 @@ export type ScoringData = {
     name: string;
     devpostUrl: string | null;
     tracks: string[];
+    /** Short badges: sponsor, or the name without one (lib/event/track-badge). */
+    badges: string[];
   }[];
   stations: { id: string; label: string }[];
   seats: { stationId: string; judgeId: string }[];
@@ -93,7 +96,7 @@ export async function loadScoring(
     await db
       .from("assignments")
       .select(
-        "id, team_id, panel_id, slots(starts_at), teams(name, devpost_url, team_tracks(tracks(name)))",
+        "id, team_id, panel_id, slots(starts_at), teams(name, devpost_url, team_tracks(tracks(name, sponsor, sort_order)))",
       )
       .eq("schedule_id", pub.id)
       .neq("status", "cancelled"),
@@ -121,6 +124,19 @@ export async function loadScoring(
         tracks: a.teams.team_tracks
           .map((t) => t.tracks?.name ?? "")
           .filter(Boolean),
+        badges: trackBadges(
+          a.teams.team_tracks.flatMap((t) =>
+            t.tracks
+              ? [
+                  {
+                    name: t.tracks.name,
+                    sponsor: t.tracks.sponsor,
+                    sortOrder: t.tracks.sort_order,
+                  },
+                ]
+              : [],
+          ),
+        ),
       });
   return {
     ...base,
