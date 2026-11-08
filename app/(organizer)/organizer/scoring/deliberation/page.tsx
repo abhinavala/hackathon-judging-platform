@@ -147,7 +147,7 @@ export default async function DeliberationPage({
                             </span>
                           ))
                         ) : (
-                          <span className="text-xs text-gray-600">
+                          <span className="text-xs text-gray-600 dark:text-gray-300">
                             no sponsor track
                           </span>
                         )}
